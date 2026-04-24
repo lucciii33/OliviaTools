@@ -22,10 +22,14 @@ export interface Doc {
   requestBody: DocParam[]
   queryParams: DocParam[]
   responses: DocResponse[]
-  prNumber: number
+  source?: string
+  prNumber?: number
+  sourceFile?: string
+  sourceSha?: string
   repo: string
   owner: string
-  createdAt: string
+  updatedAt?: string
+  createdAt?: string
 }
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? ""
@@ -39,15 +43,18 @@ export function useDocsApi() {
     setLoading(true)
     setError(null)
     try {
-      const params = repo ? `?repo=${repo}` : ""
+      const params = repo
+        ? `?repo=${encodeURIComponent(repo)}&_=${Date.now()}`
+        : `?_=${Date.now()}`
       const res = await fetch(`${BASE_URL}/api/docs${params}`, {
+        cache: "no-store",
         headers: { Authorization: `Bearer ${getAuthToken()}` },
       })
-      if (!res.ok) throw new Error("Request failed")
+      if (!res.ok) throw new Error(`Request failed with ${res.status}`)
       const data = await res.json()
       setDocs(data)
-    } catch {
-      setError("Error loading docs")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error loading docs")
     } finally {
       setLoading(false)
     }

@@ -1,4 +1,5 @@
 import { BookOpen, Menu } from "lucide-react"
+import { Link, useLocation } from "react-router"
 import { Button } from "~/components/ui/button"
 import {
   Sheet,
@@ -8,15 +9,27 @@ import {
   SheetTrigger,
 } from "~/components/ui/sheet"
 import { useAuth } from "~/context/AuthContext"
+import { cn } from "~/lib/utils"
 
-interface SidebarProps {
-  repos: string[]
-  selected: string | null
-  onSelect: (repo: string | null) => void
+export interface RepoEntry {
+  owner: string
+  repo: string
+  count?: number
 }
 
-function SidebarContent({ repos, selected, onSelect }: SidebarProps) {
+interface SidebarProps {
+  repos: RepoEntry[]
+}
+
+const itemBase =
+  "w-full flex items-center justify-between gap-2 text-sm px-3 py-2 rounded-md transition-colors truncate"
+const itemIdle = "text-white/60 hover:text-white hover:bg-white/5"
+const itemActive = "bg-white/10 text-white"
+
+function SidebarContent({ repos }: SidebarProps) {
   const { user, logout } = useAuth()
+  const location = useLocation()
+  const isAllActive = location.pathname === "/docs"
 
   return (
     <div className="flex flex-col h-full">
@@ -26,30 +39,33 @@ function SidebarContent({ repos, selected, onSelect }: SidebarProps) {
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        <p className="text-xs text-white/30 uppercase tracking-wider px-2 mb-2">Repositories</p>
-        <button
-          onClick={() => onSelect(null)}
-          className={`w-full text-left text-sm px-3 py-2 rounded-md transition-colors ${
-            selected === null
-              ? "bg-white/10 text-white"
-              : "text-white/60 hover:text-white hover:bg-white/5"
-          }`}
+        <p className="text-xs text-white/30 uppercase tracking-wider px-2 mb-2">
+          Repositories
+        </p>
+        <Link
+          to="/docs"
+          className={cn(itemBase, isAllActive ? itemActive : itemIdle)}
         >
-          All repos
-        </button>
-        {repos.map((repo) => (
-          <button
-            key={repo}
-            onClick={() => onSelect(repo)}
-            className={`w-full text-left text-sm px-3 py-2 rounded-md transition-colors truncate ${
-              selected === repo
-                ? "bg-white/10 text-white"
-                : "text-white/60 hover:text-white hover:bg-white/5"
-            }`}
-          >
-            {repo}
-          </button>
-        ))}
+          <span>All repos</span>
+        </Link>
+        {repos.map((r) => {
+          const path = `/docs/${r.owner}/${r.repo}`
+          const active = location.pathname === path
+          return (
+            <Link
+              key={path}
+              to={path}
+              className={cn(itemBase, active ? itemActive : itemIdle)}
+            >
+              <span className="truncate">{r.repo}</span>
+              {r.count !== undefined && (
+                <span className="text-[10px] text-white/40 shrink-0">
+                  {r.count}
+                </span>
+              )}
+            </Link>
+          )
+        })}
       </nav>
 
       <div className="px-3 pb-4 border-t border-white/10 pt-4 space-y-2">
@@ -74,17 +90,13 @@ function SidebarContent({ repos, selected, onSelect }: SidebarProps) {
 export function Sidebar(props: SidebarProps) {
   return (
     <>
-      {/* Desktop sidebar */}
       <aside className="hidden md:flex flex-col w-56 shrink-0 bg-white/[0.03] border-r border-white/10 min-h-screen">
         <SidebarContent {...props} />
       </aside>
 
-      {/* Mobile sheet */}
       <div className="md:hidden fixed top-3 left-3 z-50">
         <Sheet>
-          <SheetTrigger
-            className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-white/10 text-white hover:bg-white/20 transition-colors"
-          >
+          <SheetTrigger className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-white/10 text-white hover:bg-white/20 transition-colors">
             <Menu className="h-5 w-5" />
           </SheetTrigger>
           <SheetContent

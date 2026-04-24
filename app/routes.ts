@@ -5,4 +5,5 @@ export default [
   route("login", "routes/login.tsx"),
   route("register", "routes/register.tsx"),
   route("docs", "routes/docs.tsx"),
+  route("docs/:owner/:repo", "routes/docs.$owner.$repo.tsx"),
 ] satisfies RouteConfig

@@ -34,12 +34,21 @@ export function DocCard({ doc, onDelete }: DocCardProps) {
           <div className="flex items-center gap-3 flex-wrap min-w-0">
             <MethodBadge method={doc.method} />
             <code className="text-sm font-mono text-white/90 break-all">{doc.path}</code>
-            <Badge
-              variant="outline"
-              className="text-xs text-white/50 border-white/20 shrink-0"
-            >
-              PR #{doc.prNumber}
-            </Badge>
+            {doc.prNumber ? (
+              <Badge
+                variant="outline"
+                className="text-xs text-white/50 border-white/20 shrink-0"
+              >
+                PR #{doc.prNumber}
+              </Badge>
+            ) : doc.source ? (
+              <Badge
+                variant="outline"
+                className="text-xs text-white/50 border-white/20 shrink-0"
+              >
+                {doc.source}
+              </Badge>
+            ) : null}
           </div>
           <div className="flex items-center gap-1 shrink-0">
             {hasDetails && (
