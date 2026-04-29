@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import { BookOpen, Menu } from "lucide-react"
 import { Link, useLocation } from "react-router"
 import { Button } from "~/components/ui/button"
@@ -9,27 +10,24 @@ import {
   SheetTrigger,
 } from "~/components/ui/sheet"
 import { useAuth } from "~/context/AuthContext"
+import { useInstallationsApi } from "~/api/installationsApi"
 import { cn } from "~/lib/utils"
-
-export interface RepoEntry {
-  owner: string
-  repo: string
-  count?: number
-}
-
-interface SidebarProps {
-  repos: RepoEntry[]
-}
 
 const itemBase =
   "w-full flex items-center justify-between gap-2 text-sm px-3 py-2 rounded-md transition-colors truncate"
 const itemIdle = "text-white/60 hover:text-white hover:bg-white/5"
 const itemActive = "bg-white/10 text-white"
 
-function SidebarContent({ repos }: SidebarProps) {
+function SidebarContent() {
   const { user, logout } = useAuth()
   const location = useLocation()
+  const { installations, getInstallations } = useInstallationsApi()
   const isAllActive = location.pathname === "/docs"
+
+  useEffect(() => {
+    getInstallations()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div className="flex flex-col h-full">
@@ -48,8 +46,8 @@ function SidebarContent({ repos }: SidebarProps) {
         >
           <span>All repos</span>
         </Link>
-        {repos.map((r) => {
-          const path = `/docs/${r.owner}/${r.repo}`
+        {installations.map((i) => {
+          const path = `/docs/${i.owner}/${i.repo}`
           const active = location.pathname === path
           return (
             <Link
@@ -57,12 +55,7 @@ function SidebarContent({ repos }: SidebarProps) {
               to={path}
               className={cn(itemBase, active ? itemActive : itemIdle)}
             >
-              <span className="truncate">{r.repo}</span>
-              {r.count !== undefined && (
-                <span className="text-[10px] text-white/40 shrink-0">
-                  {r.count}
-                </span>
-              )}
+              <span className="truncate">{i.repo}</span>
             </Link>
           )
         })}
@@ -87,11 +80,11 @@ function SidebarContent({ repos }: SidebarProps) {
   )
 }
 
-export function Sidebar(props: SidebarProps) {
+export function Sidebar() {
   return (
     <>
       <aside className="hidden md:flex flex-col w-56 shrink-0 bg-white/[0.03] border-r border-white/10 min-h-screen">
-        <SidebarContent {...props} />
+        <SidebarContent />
       </aside>
 
       <div className="md:hidden fixed top-3 left-3 z-50">
@@ -106,7 +99,7 @@ export function Sidebar(props: SidebarProps) {
             <SheetHeader className="sr-only">
               <SheetTitle>Navigation</SheetTitle>
             </SheetHeader>
-            <SidebarContent {...props} />
+            <SidebarContent />
           </SheetContent>
         </Sheet>
       </div>

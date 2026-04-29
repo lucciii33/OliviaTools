@@ -55,7 +55,7 @@ export default function DocsIndex() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white flex">
-      <Sidebar repos={repos} />
+      <Sidebar />
 
       <main className="flex-1 px-5 md:px-8 py-6 min-w-0">
         <div className="flex items-center justify-between mb-6">
@@ -65,14 +65,30 @@ export default function DocsIndex() {
               {repos.length} repo{repos.length !== 1 ? "s" : ""}
             </p>
           </div>
-          <Button
-            size="sm"
-            className="bg-blue-600 hover:bg-blue-500 text-white gap-1.5"
-            onClick={() => setBackfillOpen(true)}
-          >
-            <Rocket className="h-3.5 w-3.5" />
-            Generate docs
-          </Button>
+          <div className="flex items-center gap-2">
+            {repos.length > 0 && (
+              <a
+                href={connectUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "sm" }),
+                  "border-white/20 text-white/80 hover:text-white hover:bg-white/10 hover:border-white/30 gap-1.5"
+                )}
+              >
+                <Github className="h-3.5 w-3.5" />
+                Connect repo
+              </a>
+            )}
+            <Button
+              size="sm"
+              className="bg-blue-600 hover:bg-blue-500 text-white gap-1.5"
+              onClick={() => setBackfillOpen(true)}
+            >
+              <Rocket className="h-3.5 w-3.5" />
+              Generate docs
+            </Button>
+          </div>
         </div>
 
         {repos.length === 0 && (

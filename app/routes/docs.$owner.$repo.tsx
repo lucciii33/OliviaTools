@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router"
 import { ArrowLeft, Loader2, RefreshCw, Rocket } from "lucide-react"
 import { Button } from "~/components/ui/button"
-import { Sidebar, type RepoEntry } from "~/components/Sidebar"
+import { Sidebar } from "~/components/Sidebar"
 import { DocCard } from "~/components/DocCard"
 import { BackfillDialog } from "~/components/BackfillDialog"
 import { useAuth } from "~/context/AuthContext"
 import { useDocsApi } from "~/api/docsApi"
-import { addKnownRepo, type KnownRepo } from "~/lib/knownRepos"
+import { addKnownRepo } from "~/lib/knownRepos"
 
 export default function DocsRepo() {
   const { user } = useAuth()
@@ -17,7 +17,6 @@ export default function DocsRepo() {
   const repo = params.repo ?? ""
   const { docs, loading, error, getDocs, deleteDoc } = useDocsApi()
   const [backfillOpen, setBackfillOpen] = useState(false)
-  const [sidebarRepos, setSidebarRepos] = useState<KnownRepo[]>([])
 
   useEffect(() => {
     if (!user) {
@@ -25,21 +24,10 @@ export default function DocsRepo() {
       return
     }
     if (!repo) return
-    setSidebarRepos(addKnownRepo({ owner, repo }))
+    addKnownRepo({ owner, repo })
     getDocs(repo)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, owner, repo])
-
-  const repos = useMemo<RepoEntry[]>(
-    () =>
-      sidebarRepos.map((r) => ({
-        owner: r.owner,
-        repo: r.repo,
-        count:
-          r.owner === owner && r.repo === repo ? docs.length : undefined,
-      })),
-    [sidebarRepos, docs.length, owner, repo]
-  )
 
   const repoDocs = useMemo(
     () =>
@@ -53,7 +41,7 @@ export default function DocsRepo() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white flex">
-      <Sidebar repos={repos} />
+      <Sidebar />
 
       <main className="flex-1 px-5 md:px-8 py-6 min-w-0">
         <div className="flex items-start justify-between gap-3 mb-6">
@@ -145,7 +133,7 @@ export default function DocsRepo() {
         lockRepo
         onCompleted={(payload) => {
           setBackfillOpen(false)
-          setSidebarRepos(addKnownRepo(payload))
+          addKnownRepo(payload)
           if (payload.owner !== owner || payload.repo !== repo) {
             navigate(`/docs/${payload.owner}/${payload.repo}`)
           } else {
