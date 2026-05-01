@@ -40,7 +40,8 @@ export interface McpExample {
 
 export interface McpDoc {
   _id?: string
-  serverName: string
+  projectId?: string
+  serverName?: string
   serverUrl?: string
   transport?: McpTransport
   toolName: string
@@ -80,18 +81,58 @@ export interface McpTool {
   inputSchema?: Record<string, unknown>
 }
 
-export interface ListMcpToolsPayload {
-  config: McpServerConfig
-}
-
-export interface ListMcpToolsResponse {
-  tools: McpTool[]
-}
-
-export interface GenerateMcpDocsPayload {
-  config: McpServerConfig
+export interface McpQaRunPayload {
+  projectId: string
   save: boolean
+  maxCasesPerTool: number
   sampleArgsByTool?: Record<string, Record<string, unknown>>
+}
+
+export interface McpQaBug {
+  toolName: string
+  testCaseName: string
+  severity: string
+  category: string
+  title: string
+  description?: string
+  expected?: string
+  actual?: string
+  evidence?: string
+  recommendation?: string
+  args?: Record<string, unknown>
+  response?: unknown
+  rawToolResponse?: unknown
+}
+
+export interface McpQaResult {
+  name: string
+  category: string
+  toolName: string
+  args?: Record<string, unknown>
+  execution?: {
+    status?: string
+    error?: string | null
+    response?: unknown
+    rawToolResponse?: unknown
+    responseSchema?: Record<string, unknown>
+  }
+  verdict?: "pass" | "fail" | "warn" | string
+  bug?: McpQaBug | Record<string, unknown> | null
+  reasoning?: string
+}
+
+export interface McpQaRunResponse {
+  runId?: string
+  summary?: {
+    total: number
+    passed: number
+    failed: number
+    warned: number
+    bugs: number
+  }
+  cases?: unknown[]
+  results?: McpQaResult[]
+  bugs?: McpQaBug[]
 }
 
 export interface GenerateMcpDocsResponse {
@@ -106,6 +147,42 @@ export interface GenerateMcpDocsResponse {
   generationError?: string | null
 }
 
+export interface McpProject {
+  _id: string
+  projectName: string
+  name?: string
+  config: McpServerConfig
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface McpProjectBug extends McpQaBug {
+  _id: string
+  status?: string
+  projectId?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface McpProjectDetailResponse {
+  project: McpProject
+  tools: McpTool[]
+  docs: McpDoc[]
+  bugs: McpProjectBug[]
+}
+
+export interface CreateMcpProjectPayload {
+  projectName: string
+  config: McpServerConfig
+  save: boolean
+  sampleArgsByTool?: Record<string, Record<string, unknown>>
+}
+
+export interface CreateMcpProjectResponse extends McpProjectDetailResponse {
+  projectId: string
+  docsResult?: GenerateMcpDocsResponse
+}
+
 async function readJson<T>(res: Response): Promise<T> {
   const data = await res.json().catch(() => null)
   if (!res.ok) {
@@ -118,23 +195,59 @@ async function readJson<T>(res: Response): Promise<T> {
   return data as T
 }
 
-export async function generateMcpDocs(payload: GenerateMcpDocsPayload) {
-  const res = await apiFetch("/api/mcp-lab/docs/generate", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  })
-  return readJson<GenerateMcpDocsResponse>(res)
+export async function listMcpProjects() {
+  const res = await apiFetch("/api/mcp-lab/projects", { cache: "no-store" })
+  return readJson<{ projects: McpProject[] }>(res)
 }
 
-export async function listMcpTools(payload: ListMcpToolsPayload) {
-  const res = await apiFetch("/api/mcp-lab/tools", {
+export async function createMcpProject(payload: CreateMcpProjectPayload) {
+  const res = await apiFetch("/api/mcp-lab/projects", {
     method: "POST",
     body: JSON.stringify(payload),
   })
-  return readJson<ListMcpToolsResponse>(res)
+  return readJson<CreateMcpProjectResponse>(res)
+}
+
+export async function getMcpProject(id: string) {
+  const res = await apiFetch(`/api/mcp-lab/projects/${id}`, {
+    cache: "no-store",
+  })
+  return readJson<McpProjectDetailResponse>(res)
+}
+
+export async function getMcpProjectTools(id: string) {
+  const res = await apiFetch(`/api/mcp-lab/projects/${id}/tools`, {
+    cache: "no-store",
+  })
+  return readJson<{ tools: McpTool[] }>(res)
+}
+
+export async function runMcpQa(payload: McpQaRunPayload) {
+  const res = await apiFetch("/api/mcp-lab/qa/run", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+  return readJson<McpQaRunResponse>(res)
+}
+
+export async function listMcpBugs(projectId: string) {
+  const query = new URLSearchParams({ projectId })
+  const res = await apiFetch(`/api/mcp-lab/bugs?${query.toString()}`, {
+    cache: "no-store",
+  })
+  return readJson<{ bugs: McpProjectBug[] }>(res)
+}
+
+export async function updateMcpBugStatus(id: string, status: string) {
+  const res = await apiFetch(`/api/mcp-lab/bugs/${id}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  })
+  return readJson<{ bug?: McpProjectBug; ok?: boolean }>(res)
 }
 
 export async function listMcpDocs(params: {
+  projectId?: string
   serverName?: string
   serverUrl?: string
   toolName?: string

@@ -14,20 +14,28 @@ import {
   Loader2,
   RefreshCw,
   Server,
+  ShieldCheck,
   Trash2,
   WandSparkles,
+  XCircle,
 } from "lucide-react"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
 import { useAuth } from "~/context/AuthContext"
 import {
+  createMcpProject,
   deleteMcpDoc,
-  generateMcpDocs,
-  listMcpDocs,
-  listMcpTools,
-  type GenerateMcpDocsPayload,
+  getMcpProject,
+  listMcpBugs,
+  listMcpProjects,
+  runMcpQa,
+  updateMcpBugStatus,
   type McpDoc,
+  type McpProject,
+  type McpProjectBug,
+  type McpQaRunPayload,
+  type McpQaRunResponse,
   type McpServerConfig,
   type McpTool,
   type McpTransport,
@@ -40,6 +48,7 @@ const selectClass =
   "h-8 w-full rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-sm text-white outline-none transition-colors focus-visible:border-blue-500/50 focus-visible:ring-3 focus-visible:ring-blue-500/50"
 const textareaClass =
   "min-h-20 w-full rounded-lg border border-white/15 bg-white/5 px-2.5 py-2 text-sm text-white placeholder:text-white/30 outline-none transition-colors focus-visible:border-blue-500/50 focus-visible:ring-3 focus-visible:ring-blue-500/50"
+const MCP_CONFIG_KEY = "mcp-docs-last-config"
 
 function parseArgs(value: string) {
   return value
@@ -100,25 +109,35 @@ function parseSampleValue(value: string) {
 export default function McpDocs() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const [projects, setProjects] = useState<McpProject[]>([])
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
+  const [projectName, setProjectName] = useState("montemauro")
   const [docs, setDocs] = useState<McpDoc[]>([])
-  const [name, setName] = useState("mi-mcp-local")
-  const [transport, setTransport] = useState<McpTransport>("http")
-  const [url, setUrl] = useState("http://localhost:3001/mcp")
+  const [name, setName] = useState("montemauro")
+  const [transport, setTransport] = useState<McpTransport>("stdio")
+  const [url, setUrl] = useState("")
   const [command, setCommand] = useState("node")
-  const [args, setArgs] = useState("./server.js")
+  const [args, setArgs] = useState(
+    "/Users/angelo/montemauro/backend/mcp-server.js"
+  )
   const [bearerToken, setBearerToken] = useState("")
   const [apiKey, setApiKey] = useState("")
   const [apiKeyHeader, setApiKeyHeader] = useState("")
   const [headers, setHeaders] = useState("")
+  const [maxCasesPerTool, setMaxCasesPerTool] = useState(5)
   const [tools, setTools] = useState<McpTool[]>([])
+  const [bugs, setBugs] = useState<McpProjectBug[]>([])
   const [sampleArgsByTool, setSampleArgsByTool] = useState<
     Record<string, Record<string, string>>
   >({})
   const [save, setSave] = useState(true)
   const [connecting, setConnecting] = useState(false)
-  const [generating, setGenerating] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [projectLoading, setProjectLoading] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [qaRunningTool, setQaRunningTool] = useState<string | null>(null)
+  const [qaRun, setQaRun] = useState<McpQaRunResponse | null>(null)
+  const [lastQaPayload, setLastQaPayload] = useState<McpQaRunPayload | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
@@ -142,13 +161,92 @@ export default function McpDocs() {
     setRefreshing(true)
     setError(null)
     try {
-      const data = await listMcpDocs()
-      setDocs(data.docs ?? [])
+      await refreshProjects(activeProjectId)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error loading MCP docs")
     } finally {
       setRefreshing(false)
     }
+  }
+
+  async function refreshProjects(preferredProjectId?: string | null) {
+    const data = await listMcpProjects()
+    const nextProjects = data.projects ?? []
+    setProjects(nextProjects)
+
+    const nextActiveId =
+      preferredProjectId ??
+      activeProjectId ??
+      nextProjects[0]?._id ??
+      null
+
+    if (nextActiveId) {
+      await loadProject(nextActiveId)
+    } else {
+      setActiveProjectId(null)
+      setDocs([])
+      setTools([])
+      setBugs([])
+    }
+  }
+
+  function applyProject(project: McpProject) {
+    setProjectName(project.projectName ?? project.name ?? "")
+    applyConfig(project.config)
+  }
+
+  function initializeSampleArgs(nextTools: McpTool[]) {
+    setSampleArgsByTool(
+      nextTools.reduce<Record<string, Record<string, string>>>((acc, tool) => {
+        const toolName = getToolName(tool)
+        const fields = getSchemaProperties(tool.inputSchema)
+        acc[toolName] = fields.reduce<Record<string, string>>((fieldAcc, field) => {
+          fieldAcc[field.name] = ""
+          return fieldAcc
+        }, {})
+        return acc
+      }, {})
+    )
+  }
+
+  async function loadProject(id: string) {
+    setProjectLoading(true)
+    setError(null)
+    try {
+      const data = await getMcpProject(id)
+      setActiveProjectId(data.project._id)
+      setDocs(data.docs ?? [])
+      setTools(data.tools ?? [])
+      setBugs(data.bugs ?? [])
+      applyProject(data.project)
+      initializeSampleArgs(data.tools ?? [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error loading MCP project")
+    } finally {
+      setProjectLoading(false)
+    }
+  }
+
+  function applyConfig(config: McpServerConfig) {
+    setName(config.name ?? "")
+    setTransport(config.transport)
+    if (config.transport === "stdio") {
+      setCommand(config.command ?? "")
+      setArgs(config.args?.join(" ") ?? "")
+      setUrl("")
+    } else {
+      setUrl(config.url ?? "")
+      setCommand("")
+      setArgs("")
+    }
+    setBearerToken(config.bearerToken ?? "")
+    setApiKey(config.apiKey ?? "")
+    setApiKeyHeader(config.apiKeyHeader ?? "")
+    setHeaders(config.headers ? JSON.stringify(config.headers, null, 2) : "")
+  }
+
+  function saveConfig(config: McpServerConfig) {
+    localStorage.setItem(MCP_CONFIG_KEY, JSON.stringify(config))
   }
 
   function buildConfig(): McpServerConfig | null {
@@ -210,98 +308,44 @@ export default function McpDocs() {
     }
   }
 
-  async function handleConnect(e: FormEvent) {
+  async function handleCreateProject(e: FormEvent) {
     e.preventDefault()
     setError(null)
     setSuccess(null)
+
+    const nextProjectName = projectName.trim()
+    if (!nextProjectName) {
+      setError("Project name is required")
+      return
+    }
 
     const config = buildConfig()
     if (!config) return
 
     setConnecting(true)
     try {
-      const data = await listMcpTools({ config })
-      const nextTools = data.tools ?? []
-      setTools(nextTools)
-      setSampleArgsByTool(
-        nextTools.reduce<Record<string, Record<string, string>>>((acc, tool) => {
-          const toolName = getToolName(tool)
-          const fields = getSchemaProperties(tool.inputSchema)
-          acc[toolName] = fields.reduce<Record<string, string>>((fieldAcc, field) => {
-            fieldAcc[field.name] = ""
-            return fieldAcc
-          }, {})
-          return acc
-        }, {})
-      )
+      const data = await createMcpProject({
+        projectName: nextProjectName,
+        config,
+        save,
+        sampleArgsByTool: buildSampleArgsPayload(),
+      })
+      saveConfig(config)
+      setActiveProjectId(data.projectId ?? data.project._id)
+      setDocs(data.docs ?? data.docsResult?.docs ?? [])
+      setTools(data.tools ?? [])
+      setBugs(data.bugs ?? [])
+      initializeSampleArgs(data.tools ?? [])
+      await refreshProjects(data.projectId ?? data.project._id)
       setSuccess(
-        `Connected ${nextTools.length} tool${nextTools.length === 1 ? "" : "s"}`
+        `Created ${nextProjectName} with ${(data.docs ?? data.docsResult?.docs ?? []).length} doc${
+          (data.docs ?? data.docsResult?.docs ?? []).length === 1 ? "" : "s"
+        }`
       )
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error connecting MCP tools")
+      setError(err instanceof Error ? err.message : "Error creating MCP project")
     } finally {
       setConnecting(false)
-    }
-  }
-
-  async function handleGenerate() {
-    setError(null)
-    setSuccess(null)
-
-    const config = buildConfig()
-    if (!config) return
-
-    const payload: GenerateMcpDocsPayload = {
-      config,
-      save,
-      sampleArgsByTool: tools.reduce<Record<string, Record<string, unknown>>>(
-        (acc, tool) => {
-          const toolName = getToolName(tool)
-          const values = sampleArgsByTool[toolName] ?? {}
-          acc[toolName] = Object.entries(values).reduce<Record<string, unknown>>(
-            (valueAcc, [key, value]) => {
-              valueAcc[key] = parseSampleValue(value)
-              return valueAcc
-            },
-            {}
-          )
-          return acc
-        },
-        {}
-      ),
-    }
-
-    setGenerating(true)
-    try {
-      const data = await generateMcpDocs(payload)
-      const toolResponses = data.toolResponses ?? {}
-      setDocs(
-        (data.docs ?? []).map((doc) => {
-          const toolResponse = toolResponses[doc.toolName]
-          if (!toolResponse) return doc
-          return {
-            ...doc,
-            sampleArgs: doc.sampleArgs ?? toolResponse.sampleArgs,
-            sampleResponse: doc.sampleResponse ?? toolResponse.response,
-            rawToolResponse: doc.rawToolResponse ?? toolResponse.rawToolResponse,
-            responseSchema: doc.responseSchema ?? toolResponse.responseSchema,
-            responseVerified:
-              doc.responseVerified ?? toolResponse.responseVerified,
-            responseStatus: doc.responseStatus ?? toolResponse.responseStatus,
-            responseError: doc.responseError ?? toolResponse.responseError,
-          }
-        })
-      )
-      setSuccess(
-        `Generated ${data.docs?.length ?? 0} doc${
-          data.docs?.length === 1 ? "" : "s"
-        }${data.savedCount !== undefined ? `, saved ${data.savedCount}` : ""}`
-      )
-      if (data.generationError) setError(data.generationError)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error generating MCP docs")
-    } finally {
-      setGenerating(false)
     }
   }
 
@@ -326,6 +370,79 @@ export default function McpDocs() {
       setError(err instanceof Error ? err.message : "Error deleting MCP doc")
     } finally {
       setDeletingId(null)
+    }
+  }
+
+  function buildSampleArgsPayload() {
+    return Object.entries(sampleArgsByTool).reduce<
+      Record<string, Record<string, unknown>>
+    >((acc, [toolName, values]) => {
+      acc[toolName] = Object.entries(values).reduce<Record<string, unknown>>(
+        (valueAcc, [key, value]) => {
+          valueAcc[key] = parseSampleValue(value)
+          return valueAcc
+        },
+        {}
+      )
+      return acc
+    }, {})
+  }
+
+  async function handleRunQa(toolName: string) {
+    setError(null)
+    setSuccess(null)
+
+    if (!activeProjectId) {
+      setError("Select or create a project before running QA")
+      return
+    }
+
+    setQaRunningTool(toolName)
+    try {
+      const payload: McpQaRunPayload = {
+        projectId: activeProjectId,
+        save,
+        maxCasesPerTool,
+        sampleArgsByTool: buildSampleArgsPayload(),
+      }
+      setLastQaPayload(payload)
+      const data = await runMcpQa(payload)
+      const results = Array.isArray(data.results) ? data.results : []
+      const bugs = Array.isArray(data.bugs) ? data.bugs : []
+      const summary =
+        data.summary ?? {
+          total: results.length,
+          passed: results.filter((result) => result.verdict === "pass").length,
+          failed: results.filter((result) => result.verdict === "fail").length,
+          warned: results.filter((result) => result.verdict === "warn").length,
+          bugs: bugs.length,
+        }
+      const normalizedRun = { ...data, summary, results, bugs }
+      setQaRun(normalizedRun)
+      const bugData = await listMcpBugs(activeProjectId).catch(() => null)
+      if (bugData) setBugs(bugData.bugs ?? [])
+      setSuccess(
+        `QA completed: ${summary.passed}/${summary.total} passed, ${summary.bugs} bug${
+          summary.bugs === 1 ? "" : "s"
+        }`
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error running MCP QA")
+    } finally {
+      setQaRunningTool(null)
+    }
+  }
+
+  async function handleBugStatus(id: string, status: string) {
+    setError(null)
+    try {
+      await updateMcpBugStatus(id, status)
+      if (activeProjectId) {
+        const data = await listMcpBugs(activeProjectId)
+        setBugs(data.bugs ?? [])
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error updating bug status")
     }
   }
 
@@ -359,6 +476,33 @@ export default function McpDocs() {
           >
             <span>MCP Docs</span>
           </Link>
+          <div className="pt-4">
+            <p className="text-xs text-white/30 uppercase tracking-wider px-2 mb-2">
+              MCP Projects
+            </p>
+            {projects.map((project) => (
+              <button
+                key={project._id}
+                type="button"
+                onClick={() => loadProject(project._id)}
+                className={cn(
+                  "w-full flex items-center justify-between gap-2 text-sm px-3 py-2 rounded-md transition-colors text-left",
+                  activeProjectId === project._id
+                    ? "bg-white/10 text-white"
+                    : "text-white/60 hover:text-white hover:bg-white/5"
+                )}
+              >
+                <span className="truncate">
+                  {project.projectName ?? project.name}
+                </span>
+              </button>
+            ))}
+            {projects.length === 0 && (
+              <p className="px-2 py-2 text-xs text-white/35">
+                No MCP projects yet.
+              </p>
+            )}
+          </div>
         </nav>
         <div className="px-3 pb-4 border-t border-white/10 pt-4 space-y-2">
           <p className="text-xs text-white/40 px-2 truncate">
@@ -386,7 +530,7 @@ export default function McpDocs() {
             </Link>
             <h1 className="text-lg font-semibold text-white">MCP Docs</h1>
             <p className="text-xs text-white/40 mt-0.5">
-              Configure an MCP server, generate docs, and review saved tools.
+              Create MCP projects, review generated docs, and track bugs.
             </p>
           </div>
           <Button
@@ -394,7 +538,7 @@ export default function McpDocs() {
             size="icon"
             className="text-white/40 hover:text-white hover:bg-white/10"
             onClick={refreshDocs}
-            disabled={refreshing || connecting || generating}
+            disabled={refreshing || connecting}
             title="Refresh docs"
           >
             <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
@@ -417,13 +561,21 @@ export default function McpDocs() {
               </div>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleConnect} className="space-y-4">
+              <form onSubmit={handleCreateProject} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs text-white/60">Project name</label>
+                  <Input
+                    value={projectName}
+                    onChange={(e) => setProjectName(e.target.value)}
+                    required
+                    className={fieldClass}
+                  />
+                </div>
                 <div className="space-y-1.5">
                   <label className="text-xs text-white/60">Server name</label>
                   <Input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="mi-mcp-local"
                     required
                     className={fieldClass}
                   />
@@ -446,20 +598,18 @@ export default function McpDocs() {
                   <>
                     <div className="space-y-1.5">
                       <label className="text-xs text-white/60">Command</label>
-                      <Input
-                        value={command}
-                        onChange={(e) => setCommand(e.target.value)}
-                        placeholder="node"
-                        required
-                        className={fieldClass}
-                      />
+                    <Input
+                      value={command}
+                      onChange={(e) => setCommand(e.target.value)}
+                      required
+                      className={fieldClass}
+                    />
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-xs text-white/60">Args</label>
                       <textarea
                         value={args}
                         onChange={(e) => setArgs(e.target.value)}
-                        placeholder="./server.js"
                         className={textareaClass}
                       />
                     </div>
@@ -470,7 +620,6 @@ export default function McpDocs() {
                     <Input
                       value={url}
                       onChange={(e) => setUrl(e.target.value)}
-                      placeholder="http://localhost:3001/mcp"
                       required
                       className={fieldClass}
                     />
@@ -521,6 +670,27 @@ export default function McpDocs() {
                   </div>
                 </details>
 
+                <details className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+                  <summary className="cursor-pointer text-xs text-white/60">
+                    QA settings
+                  </summary>
+                  <div className="mt-3 space-y-1.5">
+                    <label className="text-xs text-white/60">
+                      Max cases per tool
+                    </label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={maxCasesPerTool}
+                      onChange={(e) =>
+                        setMaxCasesPerTool(Number(e.target.value) || 1)
+                      }
+                      className={fieldClass}
+                    />
+                  </div>
+                </details>
+
                 {error && (
                   <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-md px-3 py-2">
                     {error}
@@ -535,15 +705,15 @@ export default function McpDocs() {
 
                 <Button
                   type="submit"
-                  disabled={connecting || generating}
+                  disabled={connecting}
                   className="w-full bg-blue-600 hover:bg-blue-500 text-white gap-1.5"
                 >
                   {connecting ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    <Server className="h-4 w-4" />
+                    <WandSparkles className="h-4 w-4" />
                   )}
-                  {connecting ? "Connecting..." : "Connect tools"}
+                  {connecting ? "Creating..." : "Create project"}
                 </Button>
               </form>
 
@@ -607,19 +777,6 @@ export default function McpDocs() {
                       </div>
                     )
                   })}
-                  <Button
-                    type="button"
-                    disabled={generating || connecting}
-                    className="w-full bg-blue-600 hover:bg-blue-500 text-white gap-1.5"
-                    onClick={handleGenerate}
-                  >
-                    {generating ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <WandSparkles className="h-4 w-4" />
-                    )}
-                    {generating ? "Generating..." : "Generate docs"}
-                  </Button>
                 </div>
               )}
             </CardContent>
@@ -628,30 +785,39 @@ export default function McpDocs() {
           <section className="min-w-0">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <h2 className="text-sm font-medium text-white">Generated tools</h2>
+                <h2 className="text-sm font-medium text-white">
+                  {projectName ? projectName : "Generated tools"}
+                </h2>
                 <p className="text-xs text-white/40 mt-0.5">
-                  {docCount} doc{docCount !== 1 ? "s" : ""}
+                  {docCount} doc{docCount !== 1 ? "s" : ""} · {tools.length} tool{tools.length !== 1 ? "s" : ""} · {bugs.length} bug{bugs.length !== 1 ? "s" : ""}
                 </p>
               </div>
             </div>
 
-            {refreshing && docs.length === 0 && (
+            {(refreshing || projectLoading) && docs.length === 0 && (
               <div className="flex items-center justify-center py-24">
                 <Loader2 className="h-6 w-6 animate-spin text-white/30" />
               </div>
             )}
 
-            {!refreshing && docs.length === 0 && (
+            {!refreshing && !projectLoading && docs.length === 0 && (
               <EmptyState onGenerateFocus={() => window.scrollTo({ top: 0, behavior: "smooth" })} />
             )}
 
-            {docs.length > 0 && (
+            {!projectLoading && (docs.length > 0 || bugs.length > 0) && (
               <div className="space-y-3">
+                {bugs.length > 0 && (
+                  <ProjectBugs bugs={bugs} onStatusChange={handleBugStatus} />
+                )}
                 {docs.map((doc) => (
                   <McpDocCard
                     key={doc._id ?? doc.toolName}
                     doc={doc}
                     deleting={deletingId === doc._id}
+                    qaRun={qaRun}
+                    qaPayload={lastQaPayload}
+                    qaRunning={qaRunningTool === doc.toolName}
+                    onRunQa={() => handleRunQa(doc.toolName)}
                     onDelete={() => handleDelete(doc)}
                   />
                 ))}
@@ -689,18 +855,97 @@ function EmptyState({ onGenerateFocus }: { onGenerateFocus: () => void }) {
   )
 }
 
+function ProjectBugs({
+  bugs,
+  onStatusChange,
+}: {
+  bugs: McpProjectBug[]
+  onStatusChange: (id: string, status: string) => void
+}) {
+  return (
+    <section className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div>
+          <h3 className="text-sm font-medium text-white">Project bugs</h3>
+          <p className="text-xs text-white/40 mt-0.5">
+            {bugs.length} bug{bugs.length !== 1 ? "s" : ""}
+          </p>
+        </div>
+      </div>
+      <div className="space-y-2">
+        {bugs.map((bug) => (
+          <div
+            key={bug._id}
+            className="rounded-lg border border-red-500/20 bg-red-500/5 p-3"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <XCircle className="h-4 w-4 text-red-400" />
+                  <p className="text-sm font-medium text-red-300">
+                    {bug.title}
+                  </p>
+                  <span className="rounded border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-red-300">
+                    {bug.severity}
+                  </span>
+                  <span className="rounded border border-white/15 bg-white/5 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/50">
+                    {bug.status ?? "open"}
+                  </span>
+                </div>
+                <p className="text-xs text-white/50 mt-1">
+                  {bug.toolName} · {bug.category}
+                </p>
+                {bug.description && (
+                  <p className="text-xs text-white/65 mt-2">
+                    {bug.description}
+                  </p>
+                )}
+                {bug.evidence && (
+                  <p className="text-xs text-white/45 mt-2">
+                    Evidence: {bug.evidence}
+                  </p>
+                )}
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="border-white/20 text-white/80 hover:text-white hover:bg-white/10 shrink-0"
+                onClick={() => onStatusChange(bug._id, "fixed")}
+                disabled={bug.status === "fixed"}
+              >
+                Mark fixed
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function McpDocCard({
   doc,
   deleting,
+  qaRun,
+  qaPayload,
+  qaRunning,
+  onRunQa,
   onDelete,
 }: {
   doc: McpDoc
   deleting: boolean
+  qaRun: McpQaRunResponse | null
+  qaPayload: McpQaRunPayload | null
+  qaRunning: boolean
+  onRunQa: () => void
   onDelete: () => void
 }) {
   const args = doc.arguments ?? []
   const examples = doc.examples ?? []
   const risks = doc.risks ?? []
+  const qaResults = (qaRun?.results ?? []).filter((r) => r.toolName === doc.toolName)
+  const qaBugs = (qaRun?.bugs ?? []).filter((bug) => bug.toolName === doc.toolName)
   const responseToShow = doc.sampleResponse ?? doc.responseExample
   const hasResponseToShow = responseToShow !== undefined && responseToShow !== null
   const hasRawResponse =
@@ -746,6 +991,20 @@ function McpDocCard({
             )}
         </div>
         <Button
+          variant="outline"
+          size="sm"
+          onClick={onRunQa}
+          disabled={qaRunning}
+          className="h-8 border-white/20 text-white/80 hover:text-white hover:bg-white/10 hover:border-white/30 gap-1.5 shrink-0"
+        >
+          {qaRunning ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <ShieldCheck className="h-3.5 w-3.5 text-blue-400" />
+          )}
+          Run QA
+        </Button>
+        <Button
           variant="ghost"
           size="icon-sm"
           className="text-white/35 hover:text-red-300 hover:bg-red-500/10 shrink-0"
@@ -790,6 +1049,15 @@ function McpDocCard({
 
       {hasRawResponse && (
         <JsonBlock title="Raw MCP response" value={doc.rawToolResponse} />
+      )}
+
+      {qaRun && (
+        <McpQaPanel
+          summary={qaRun.summary}
+          results={qaResults}
+          bugs={qaBugs}
+          payload={qaPayload}
+        />
       )}
 
       <div className="mt-3">
@@ -888,6 +1156,169 @@ function McpDocCard({
         </InfoBlock>
       )}
     </article>
+  )
+}
+
+function McpQaPanel({
+  summary,
+  results,
+  bugs,
+  payload,
+}: {
+  summary: NonNullable<McpQaRunResponse["summary"]> | undefined
+  results: NonNullable<McpQaRunResponse["results"]>
+  bugs: NonNullable<McpQaRunResponse["bugs"]>
+  payload: McpQaRunPayload | null
+}) {
+  const safeSummary =
+    summary ?? {
+      total: results.length,
+      passed: results.filter((result) => result.verdict === "pass").length,
+      failed: results.filter((result) => result.verdict === "fail").length,
+      warned: results.filter((result) => result.verdict === "warn").length,
+      bugs: bugs.length,
+    }
+
+  return (
+    <div className="mt-4 border-t border-white/10 pt-4 space-y-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h4 className="text-xs text-white/40 uppercase tracking-wider">
+          QA Run
+        </h4>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="rounded-md border border-white/15 bg-white/5 px-2 py-1 text-xs text-white/70 font-mono">
+            {safeSummary.passed}/{safeSummary.total} passed
+          </span>
+          <span
+            className={cn(
+              "rounded-md border px-2 py-1 text-xs font-mono",
+              safeSummary.bugs > 0
+                ? "border-red-500/30 bg-red-500/10 text-red-300"
+                : "border-green-500/30 bg-green-500/10 text-green-300"
+            )}
+          >
+            {safeSummary.bugs} bugs
+          </span>
+        </div>
+      </div>
+
+      {payload && <JsonBlock title="QA request body" value={payload} />}
+
+      {bugs.length > 0 && (
+        <div className="space-y-2">
+          {bugs.map((bug, index) => (
+            <div
+              key={`${bug.testCaseName}-${index}`}
+              className="rounded-md border border-red-500/25 bg-red-500/5 p-3"
+            >
+              <div className="flex items-center gap-2 flex-wrap">
+                <XCircle className="h-4 w-4 text-red-400" />
+                <span className="text-sm font-medium text-red-300">
+                  {bug.title}
+                </span>
+                <span className="rounded border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-red-300">
+                  {bug.severity}
+                </span>
+                <span className="rounded border border-white/15 bg-white/5 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/50">
+                  {bug.category}
+                </span>
+              </div>
+              {bug.description && (
+                <p className="text-xs text-white/65 mt-2">{bug.description}</p>
+              )}
+              {bug.evidence && (
+                <p className="text-xs text-white/45 mt-2">
+                  Evidence: {bug.evidence}
+                </p>
+              )}
+              {bug.recommendation && (
+                <p className="text-xs text-white/45 mt-1">
+                  Recommendation: {bug.recommendation}
+                </p>
+              )}
+              {bug.args && <JsonBlock title="Bug args" value={bug.args} />}
+              {bug.response !== undefined && (
+                <JsonBlock title="Bug response" value={bug.response} />
+              )}
+              {bug.rawToolResponse !== undefined && (
+                <JsonBlock title="Bug raw response" value={bug.rawToolResponse} />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="rounded-md border border-white/10 overflow-hidden">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 px-3 py-2 text-xs text-white/40 uppercase tracking-wider bg-white/[0.02] border-b border-white/10">
+          <span>Test</span>
+          <span>Category</span>
+          <span>Verdict</span>
+        </div>
+        <div className="divide-y divide-white/10">
+          {results.map((result, index) => (
+            <details key={`${result.name}-${index}`} className="group">
+              <summary className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 items-center px-3 py-2.5 cursor-pointer hover:bg-white/[0.04] transition-colors">
+                <span className="text-sm text-white/85 truncate">
+                  {result.name}
+                </span>
+                <span className="rounded border border-white/15 bg-white/5 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/50">
+                  {result.category}
+                </span>
+                <span
+                  className={cn(
+                    "rounded px-2 py-0.5 text-xs font-mono",
+                    result.verdict === "fail"
+                      ? "bg-red-500/10 text-red-300"
+                      : result.verdict === "warn"
+                      ? "bg-yellow-500/10 text-yellow-300"
+                      : "bg-green-500/10 text-green-300"
+                  )}
+                >
+                  {result.verdict ?? "unknown"}
+                </span>
+              </summary>
+              <div className="px-3 pb-4 pt-1 space-y-3 bg-white/[0.02]">
+                {result.reasoning && (
+                  <p className="text-xs text-white/60 italic">
+                    {result.reasoning}
+                  </p>
+                )}
+                {result.args && <JsonBlock title="QA args" value={result.args} />}
+                {result.execution?.error && (
+                  <p className="text-sm text-red-300 bg-red-500/10 border border-red-500/20 rounded-md px-3 py-2">
+                    {result.execution.error}
+                  </p>
+                )}
+                {result.execution?.response !== undefined && (
+                  <JsonBlock
+                    title="Execution response"
+                    value={result.execution.response}
+                  />
+                )}
+                {result.execution?.rawToolResponse !== undefined && (
+                  <JsonBlock
+                    title="Execution raw response"
+                    value={result.execution.rawToolResponse}
+                  />
+                )}
+                {result.execution?.responseSchema !== undefined && (
+                  <JsonBlock
+                    title="Execution response schema"
+                    value={result.execution.responseSchema}
+                  />
+                )}
+                {result.bug && <JsonBlock title="Bug details" value={result.bug} />}
+              </div>
+            </details>
+          ))}
+          {results.length === 0 && (
+            <p className="text-sm text-white/40 px-3 py-6 text-center">
+              No QA results for this tool.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
 
