@@ -5,7 +5,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react"
-import { Link, useNavigate } from "react-router"
+import { Link, useNavigate, useParams } from "react-router"
 import {
   ArrowLeft,
   AlertTriangle,
@@ -109,6 +109,8 @@ function parseSampleValue(value: string) {
 export default function McpDocs() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const params = useParams<{ projectId: string }>()
+  const routeProjectId = params.projectId ?? null
   const [projects, setProjects] = useState<McpProject[]>([])
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
   const [projectName, setProjectName] = useState("montemauro")
@@ -149,19 +151,19 @@ export default function McpDocs() {
       navigate("/login", { replace: true })
       return
     }
-    refreshDocs()
+    refreshDocs(routeProjectId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, navigate])
+  }, [user, navigate, routeProjectId])
 
   const docCount = useMemo(() => docs.length, [docs])
 
   if (!user) return null
 
-  async function refreshDocs() {
+  async function refreshDocs(projectId = routeProjectId) {
     setRefreshing(true)
     setError(null)
     try {
-      await refreshProjects(activeProjectId)
+      await refreshProjects(projectId)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error loading MCP docs")
     } finally {
@@ -174,19 +176,15 @@ export default function McpDocs() {
     const nextProjects = data.projects ?? []
     setProjects(nextProjects)
 
-    const nextActiveId =
-      preferredProjectId ??
-      activeProjectId ??
-      nextProjects[0]?._id ??
-      null
-
-    if (nextActiveId) {
-      await loadProject(nextActiveId)
+    if (preferredProjectId) {
+      await loadProject(preferredProjectId)
     } else {
       setActiveProjectId(null)
       setDocs([])
       setTools([])
       setBugs([])
+      setQaRun(null)
+      setLastQaPayload(null)
     }
   }
 
@@ -337,6 +335,9 @@ export default function McpDocs() {
       setBugs(data.bugs ?? [])
       initializeSampleArgs(data.tools ?? [])
       await refreshProjects(data.projectId ?? data.project._id)
+      navigate(`/mcp-docs/${data.projectId ?? data.project._id}`, {
+        replace: true,
+      })
       setSuccess(
         `Created ${nextProjectName} with ${(data.docs ?? data.docsResult?.docs ?? []).length} doc${
           (data.docs ?? data.docsResult?.docs ?? []).length === 1 ? "" : "s"
@@ -480,11 +481,21 @@ export default function McpDocs() {
             <p className="text-xs text-white/30 uppercase tracking-wider px-2 mb-2">
               MCP Projects
             </p>
+            <Link
+              to="/mcp-docs"
+              className={cn(
+                "w-full flex items-center justify-between gap-2 text-sm px-3 py-2 rounded-md transition-colors",
+                !activeProjectId
+                  ? "bg-white/10 text-white"
+                  : "text-white/60 hover:text-white hover:bg-white/5"
+              )}
+            >
+              <span>New project</span>
+            </Link>
             {projects.map((project) => (
-              <button
+              <Link
                 key={project._id}
-                type="button"
-                onClick={() => loadProject(project._id)}
+                to={`/mcp-docs/${project._id}`}
                 className={cn(
                   "w-full flex items-center justify-between gap-2 text-sm px-3 py-2 rounded-md transition-colors text-left",
                   activeProjectId === project._id
@@ -495,7 +506,7 @@ export default function McpDocs() {
                 <span className="truncate">
                   {project.projectName ?? project.name}
                 </span>
-              </button>
+              </Link>
             ))}
             {projects.length === 0 && (
               <p className="px-2 py-2 text-xs text-white/35">
@@ -537,7 +548,7 @@ export default function McpDocs() {
             variant="ghost"
             size="icon"
             className="text-white/40 hover:text-white hover:bg-white/10"
-            onClick={refreshDocs}
+            onClick={() => refreshDocs()}
             disabled={refreshing || connecting}
             title="Refresh docs"
           >
