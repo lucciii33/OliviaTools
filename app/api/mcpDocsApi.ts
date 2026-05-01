@@ -74,6 +74,7 @@ export interface McpToolResponse {
 }
 
 export interface McpTool {
+  _id?: string
   name?: string
   toolName?: string
   title?: string
@@ -89,7 +90,9 @@ export interface McpQaRunPayload {
 }
 
 export interface McpQaBug {
-  toolName: string
+  toolName?: string
+  tool?: McpTool | string
+  toolId?: string
   testCaseName: string
   severity: string
   category: string
@@ -158,6 +161,7 @@ export interface McpProject {
 
 export interface McpProjectBug extends McpQaBug {
   _id: string
+  toolId?: string
   status?: string
   projectId?: string
   createdAt?: string

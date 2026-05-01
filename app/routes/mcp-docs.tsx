@@ -5,11 +5,13 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react"
-import { Link, useNavigate, useParams } from "react-router"
+import { Link, useLocation, useNavigate, useParams } from "react-router"
 import {
   ArrowLeft,
   AlertTriangle,
   BookOpen,
+  ChevronDown,
+  ChevronUp,
   CheckCircle2,
   Loader2,
   RefreshCw,
@@ -68,6 +70,39 @@ function getToolName(tool: McpTool) {
   return tool.name ?? tool.toolName ?? tool.title ?? "unnamed_tool"
 }
 
+function getBugToolName(bug: McpProjectBug) {
+  if (bug.toolName) return bug.toolName
+  if (typeof bug.tool === "string") return bug.tool
+  if (bug.tool) return getToolName(bug.tool)
+  return "Unknown tool"
+}
+
+function getBugToolId(bug: McpProjectBug) {
+  if (bug.toolId) return bug.toolId
+  if (bug.tool && typeof bug.tool === "object") return bug.tool._id
+  return undefined
+}
+
+function isOpenBug(bug: McpProjectBug) {
+  return !["fixed", "closed", "resolved"].includes(
+    (bug.status ?? "open").toLowerCase()
+  )
+}
+
+function getOpenBugCountForDoc(
+  doc: McpDoc,
+  tools: McpTool[],
+  bugs: McpProjectBug[]
+) {
+  const tool = tools.find((item) => getToolName(item) === doc.toolName)
+  return bugs.filter((bug) => {
+    if (!isOpenBug(bug)) return false
+    const bugToolId = getBugToolId(bug)
+    if (tool?._id && bugToolId === tool._id) return true
+    return getBugToolName(bug) === (tool ? getToolName(tool) : doc.toolName)
+  }).length
+}
+
 function getSchemaProperties(schema: Record<string, unknown> | undefined) {
   const properties =
     schema && typeof schema.properties === "object" && schema.properties
@@ -109,8 +144,10 @@ function parseSampleValue(value: string) {
 export default function McpDocs() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const params = useParams<{ projectId: string }>()
   const routeProjectId = params.projectId ?? null
+  const isBugsRoute = Boolean(routeProjectId && location.pathname.endsWith("/bugs"))
   const [projects, setProjects] = useState<McpProject[]>([])
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
   const [projectName, setProjectName] = useState("montemauro")
@@ -803,6 +840,14 @@ export default function McpDocs() {
                   {docCount} doc{docCount !== 1 ? "s" : ""} · {tools.length} tool{tools.length !== 1 ? "s" : ""} · {bugs.length} bug{bugs.length !== 1 ? "s" : ""}
                 </p>
               </div>
+              {activeProjectId && (
+                <Link
+                  to={`/mcp-docs/${activeProjectId}/bugs`}
+                  className="text-xs text-blue-300 hover:text-blue-200"
+                >
+                  Project Bugs
+                </Link>
+              )}
             </div>
 
             {(refreshing || projectLoading) && docs.length === 0 && (
@@ -811,19 +856,21 @@ export default function McpDocs() {
               </div>
             )}
 
-            {!refreshing && !projectLoading && docs.length === 0 && (
+            {!refreshing && !projectLoading && !isBugsRoute && docs.length === 0 && (
               <EmptyState onGenerateFocus={() => window.scrollTo({ top: 0, behavior: "smooth" })} />
             )}
 
-            {!projectLoading && (docs.length > 0 || bugs.length > 0) && (
+            {!projectLoading && isBugsRoute && (
+              <ProjectBugs bugs={bugs} onStatusChange={handleBugStatus} />
+            )}
+
+            {!projectLoading && !isBugsRoute && docs.length > 0 && (
               <div className="space-y-3">
-                {bugs.length > 0 && (
-                  <ProjectBugs bugs={bugs} onStatusChange={handleBugStatus} />
-                )}
                 {docs.map((doc) => (
                   <McpDocCard
                     key={doc._id ?? doc.toolName}
                     doc={doc}
+                    openBugCount={getOpenBugCountForDoc(doc, tools, bugs)}
                     deleting={deletingId === doc._id}
                     qaRun={qaRun}
                     qaPayload={lastQaPayload}
@@ -874,7 +921,10 @@ function ProjectBugs({
   onStatusChange: (id: string, status: string) => void
 }) {
   return (
-    <section className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
+    <section
+      id="project-bugs"
+      className="rounded-xl border border-white/10 bg-white/[0.03] p-5 scroll-mt-6"
+    >
       <div className="flex items-center justify-between gap-3 mb-3">
         <div>
           <h3 className="text-sm font-medium text-white">Project bugs</h3>
@@ -884,52 +934,59 @@ function ProjectBugs({
         </div>
       </div>
       <div className="space-y-2">
-        {bugs.map((bug) => (
-          <div
-            key={bug._id}
-            className="rounded-lg border border-red-500/20 bg-red-500/5 p-3"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <XCircle className="h-4 w-4 text-red-400" />
+        {bugs.map((bug) => {
+          const toolName = getBugToolName(bug)
+          return (
+            <div
+              key={bug._id}
+              className="rounded-lg border border-red-500/20 bg-red-500/5 p-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    <XCircle className="h-4 w-4 text-red-400" />
+                    <h4 className="text-base font-semibold text-white truncate">
+                      {toolName}
+                    </h4>
+                    <span className="rounded border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-red-300">
+                      {bug.severity}
+                    </span>
+                    <span className="rounded border border-white/15 bg-white/5 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/50">
+                      {bug.status ?? "open"}
+                    </span>
+                  </div>
                   <p className="text-sm font-medium text-red-300">
                     {bug.title}
                   </p>
-                  <span className="rounded border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-red-300">
-                    {bug.severity}
-                  </span>
-                  <span className="rounded border border-white/15 bg-white/5 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/50">
-                    {bug.status ?? "open"}
-                  </span>
+                  <p className="text-xs text-white/50 mt-1">
+                    {bug.category}
+                    {bug.testCaseName ? ` · ${bug.testCaseName}` : ""}
+                  </p>
+                  {bug.description && (
+                    <p className="text-xs text-white/65 mt-2">
+                      {bug.description}
+                    </p>
+                  )}
+                  {bug.evidence && (
+                    <p className="text-xs text-white/45 mt-2">
+                      Evidence: {bug.evidence}
+                    </p>
+                  )}
                 </div>
-                <p className="text-xs text-white/50 mt-1">
-                  {bug.toolName} · {bug.category}
-                </p>
-                {bug.description && (
-                  <p className="text-xs text-white/65 mt-2">
-                    {bug.description}
-                  </p>
-                )}
-                {bug.evidence && (
-                  <p className="text-xs text-white/45 mt-2">
-                    Evidence: {bug.evidence}
-                  </p>
-                )}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="border-white/20 text-white/80 hover:text-white hover:bg-white/10 shrink-0"
+                  onClick={() => onStatusChange(bug._id, "fixed")}
+                  disabled={bug.status === "fixed"}
+                >
+                  Mark fixed
+                </Button>
               </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="border-white/20 text-white/80 hover:text-white hover:bg-white/10 shrink-0"
-                onClick={() => onStatusChange(bug._id, "fixed")}
-                disabled={bug.status === "fixed"}
-              >
-                Mark fixed
-              </Button>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </section>
   )
@@ -937,6 +994,7 @@ function ProjectBugs({
 
 function McpDocCard({
   doc,
+  openBugCount,
   deleting,
   qaRun,
   qaPayload,
@@ -945,6 +1003,7 @@ function McpDocCard({
   onDelete,
 }: {
   doc: McpDoc
+  openBugCount: number
   deleting: boolean
   qaRun: McpQaRunResponse | null
   qaPayload: McpQaRunPayload | null
@@ -952,11 +1011,11 @@ function McpDocCard({
   onRunQa: () => void
   onDelete: () => void
 }) {
+  const [expanded, setExpanded] = useState(false)
   const args = doc.arguments ?? []
   const examples = doc.examples ?? []
   const risks = doc.risks ?? []
   const qaResults = (qaRun?.results ?? []).filter((r) => r.toolName === doc.toolName)
-  const qaBugs = (qaRun?.bugs ?? []).filter((bug) => bug.toolName === doc.toolName)
   const responseToShow = doc.sampleResponse ?? doc.responseExample
   const hasResponseToShow = responseToShow !== undefined && responseToShow !== null
   const hasRawResponse =
@@ -965,26 +1024,59 @@ function McpDocCard({
     doc.responseSchema !== undefined && doc.responseSchema !== null
 
   return (
-    <article className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
-      <div className="flex items-start justify-between gap-4">
+    <article className="rounded-xl border border-white/10 bg-white/[0.03]">
+      <button
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+        className="w-full flex items-center justify-between gap-3 px-5 py-4 text-left hover:bg-white/[0.03] transition-colors"
+      >
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-base font-medium text-white truncate">
-              {doc.title || doc.toolName}
+              {doc.toolName}
             </h3>
-            {doc.transport && (
-              <span className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-white/50">
-                {doc.transport}
-              </span>
+            <span
+              className={cn(
+                "rounded-md border px-2 py-0.5 text-xs",
+                openBugCount > 0
+                  ? "border-red-500/30 bg-red-500/10 text-red-300"
+                  : "border-white/10 bg-white/5 text-white/45"
             )}
-            {doc.responseVerified === true &&
-              doc.responseStatus === "final" && (
-                <span className="rounded-md border border-green-500/20 bg-green-500/10 px-2 py-0.5 text-xs text-green-300">
-                  Final response
-                </span>
-              )}
+            >
+              {openBugCount} open bug{openBugCount !== 1 ? "s" : ""}
+            </span>
           </div>
-          <p className="text-xs text-blue-300 mt-1">{doc.toolName}</p>
+        </div>
+        {expanded ? (
+          <ChevronUp className="h-4 w-4 text-white/40 shrink-0" />
+        ) : (
+          <ChevronDown className="h-4 w-4 text-white/40 shrink-0" />
+        )}
+      </button>
+
+      {expanded && (
+        <div className="px-5 pb-5 border-t border-white/10">
+          <div className="flex items-start justify-between gap-4 pt-4">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                {doc.title && doc.title !== doc.toolName && (
+                  <h3 className="text-base font-medium text-white truncate">
+                    {doc.title}
+                  </h3>
+                )}
+                {doc.transport && (
+                  <span className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-white/50">
+                    {doc.transport}
+                  </span>
+                )}
+                {doc.responseVerified === true &&
+                  doc.responseStatus === "final" && (
+                    <span className="rounded-md border border-green-500/20 bg-green-500/10 px-2 py-0.5 text-xs text-green-300">
+                      Final response
+                    </span>
+                  )}
+              </div>
+              <p className="text-xs text-blue-300 mt-1">{doc.toolName}</p>
           {doc.summary && (
             <p className="text-sm text-white/60 mt-3 leading-relaxed">
               {doc.summary}
@@ -1029,7 +1121,7 @@ function McpDocCard({
             <Trash2 className="h-3.5 w-3.5" />
           )}
         </Button>
-      </div>
+          </div>
 
       {(doc.serverName || doc.serverUrl) && (
         <div className="mt-4">
@@ -1066,7 +1158,6 @@ function McpDocCard({
         <McpQaPanel
           summary={qaRun.summary}
           results={qaResults}
-          bugs={qaBugs}
           payload={qaPayload}
         />
       )}
@@ -1166,6 +1257,8 @@ function McpDocCard({
           </ul>
         </InfoBlock>
       )}
+        </div>
+      )}
     </article>
   )
 }
@@ -1173,12 +1266,10 @@ function McpDocCard({
 function McpQaPanel({
   summary,
   results,
-  bugs,
   payload,
 }: {
   summary: NonNullable<McpQaRunResponse["summary"]> | undefined
   results: NonNullable<McpQaRunResponse["results"]>
-  bugs: NonNullable<McpQaRunResponse["bugs"]>
   payload: McpQaRunPayload | null
 }) {
   const safeSummary =
@@ -1187,7 +1278,7 @@ function McpQaPanel({
       passed: results.filter((result) => result.verdict === "pass").length,
       failed: results.filter((result) => result.verdict === "fail").length,
       warned: results.filter((result) => result.verdict === "warn").length,
-      bugs: bugs.length,
+      bugs: results.filter((result) => result.verdict === "fail").length,
     }
 
   return (
@@ -1214,50 +1305,6 @@ function McpQaPanel({
       </div>
 
       {payload && <JsonBlock title="QA request body" value={payload} />}
-
-      {bugs.length > 0 && (
-        <div className="space-y-2">
-          {bugs.map((bug, index) => (
-            <div
-              key={`${bug.testCaseName}-${index}`}
-              className="rounded-md border border-red-500/25 bg-red-500/5 p-3"
-            >
-              <div className="flex items-center gap-2 flex-wrap">
-                <XCircle className="h-4 w-4 text-red-400" />
-                <span className="text-sm font-medium text-red-300">
-                  {bug.title}
-                </span>
-                <span className="rounded border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-red-300">
-                  {bug.severity}
-                </span>
-                <span className="rounded border border-white/15 bg-white/5 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/50">
-                  {bug.category}
-                </span>
-              </div>
-              {bug.description && (
-                <p className="text-xs text-white/65 mt-2">{bug.description}</p>
-              )}
-              {bug.evidence && (
-                <p className="text-xs text-white/45 mt-2">
-                  Evidence: {bug.evidence}
-                </p>
-              )}
-              {bug.recommendation && (
-                <p className="text-xs text-white/45 mt-1">
-                  Recommendation: {bug.recommendation}
-                </p>
-              )}
-              {bug.args && <JsonBlock title="Bug args" value={bug.args} />}
-              {bug.response !== undefined && (
-                <JsonBlock title="Bug response" value={bug.response} />
-              )}
-              {bug.rawToolResponse !== undefined && (
-                <JsonBlock title="Bug raw response" value={bug.rawToolResponse} />
-              )}
-            </div>
-          ))}
-        </div>
-      )}
 
       <div className="rounded-md border border-white/10 overflow-hidden">
         <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 px-3 py-2 text-xs text-white/40 uppercase tracking-wider bg-white/[0.02] border-b border-white/10">
