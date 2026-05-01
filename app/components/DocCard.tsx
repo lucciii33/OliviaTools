@@ -5,6 +5,7 @@ import {
   ChevronUp,
   Loader2,
   Play,
+  Settings,
   ShieldCheck,
   Trash2,
 } from "lucide-react"
@@ -107,6 +108,15 @@ export function DocCard({ doc, onDelete }: DocCardProps) {
                   <ShieldCheck className="h-3.5 w-3.5 text-blue-400" />
                 )}
                 Run QA
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setConfigOpen(true)}
+                title="Edit QA config"
+                className="h-8 w-8 text-white/50 hover:text-white hover:bg-white/10"
+              >
+                <Settings className="h-4 w-4" />
               </Button>
               {hasDetails && (
                 <Button

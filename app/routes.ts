@@ -4,6 +4,8 @@ export default [
   index("routes/home.tsx"),
   route("login", "routes/login.tsx"),
   route("register", "routes/register.tsx"),
+  route("dashboard", "routes/dashboard.tsx"),
+  route("mcp-docs", "routes/mcp-docs.tsx"),
   route("docs", "routes/docs.tsx"),
   route("docs/:owner/:repo", "routes/docs.$owner.$repo.tsx"),
 ] satisfies RouteConfig

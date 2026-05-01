@@ -16,7 +16,7 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  if (user) return <Navigate to="/docs" replace />
+  if (user) return <Navigate to="/dashboard" replace />
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -25,7 +25,7 @@ export default function Login() {
     try {
       const data = await loginApi({ email, password })
       login(data)
-      navigate("/docs", { replace: true })
+      navigate("/dashboard", { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed")
     } finally {
