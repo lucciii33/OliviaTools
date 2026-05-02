@@ -84,9 +84,48 @@ export interface McpTool {
 
 export interface McpQaRunPayload {
   projectId: string
+  toolName?: string
   save: boolean
   maxCasesPerTool: number
   sampleArgsByTool?: Record<string, Record<string, unknown>>
+}
+
+export interface McpSmokeCase {
+  name: string
+  expectedTool: string
+  expectedArgs?: Record<string, unknown>
+  assertions?: string[]
+}
+
+export interface McpSmokeSuite {
+  _id: string
+  projectId?: string
+  kind?: string
+  name?: string
+  cases: McpSmokeCase[]
+  generatedBy?: { provider?: string; model?: string }
+}
+
+export interface McpSmokeResult {
+  caseName: string
+  toolName: string
+  status: "ok" | "broken" | string
+  latencyMs?: number
+  error?: string | null
+  response?: unknown
+  assertions?: string[]
+}
+
+export interface McpSmokeRunResponse {
+  suiteId: string
+  projectId: string
+  summary: { total: number; ok: number; broken: number }
+  results: McpSmokeResult[]
+}
+
+export interface McpSmokeGenerateResponse {
+  suite: McpSmokeSuite
+  generatedBy?: { provider?: string; model?: string }
 }
 
 export interface McpQaBug {
@@ -232,6 +271,38 @@ export async function runMcpQa(payload: McpQaRunPayload) {
     body: JSON.stringify(payload),
   })
   return readJson<McpQaRunResponse>(res)
+}
+
+export async function getMcpSmoke(projectId: string) {
+  const res = await apiFetch(`/api/mcp-lab/projects/${projectId}/smoke`, {
+    cache: "no-store",
+  })
+  return readJson<{ suite: McpSmokeSuite | null }>(res)
+}
+
+export async function generateMcpSmoke(
+  projectId: string,
+  payload: { provider?: "anthropic" | "openai"; model?: string } = {}
+) {
+  const res = await apiFetch(
+    `/api/mcp-lab/projects/${projectId}/smoke/generate`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  )
+  return readJson<McpSmokeGenerateResponse>(res)
+}
+
+export async function runMcpSmoke(projectId: string) {
+  const res = await apiFetch(
+    `/api/mcp-lab/projects/${projectId}/smoke/run`,
+    {
+      method: "POST",
+      body: JSON.stringify({}),
+    }
+  )
+  return readJson<McpSmokeRunResponse>(res)
 }
 
 export async function listMcpBugs(projectId: string) {

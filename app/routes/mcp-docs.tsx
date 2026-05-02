@@ -13,7 +13,9 @@ import {
   ChevronDown,
   ChevronUp,
   CheckCircle2,
+  Flame,
   Loader2,
+  Play,
   RefreshCw,
   Server,
   ShieldCheck,
@@ -28,10 +30,13 @@ import { useAuth } from "~/context/AuthContext"
 import {
   createMcpProject,
   deleteMcpDoc,
+  generateMcpSmoke,
   getMcpProject,
+  getMcpSmoke,
   listMcpBugs,
   listMcpProjects,
   runMcpQa,
+  runMcpSmoke,
   updateMcpBugStatus,
   type McpDoc,
   type McpProject,
@@ -39,6 +44,8 @@ import {
   type McpQaRunPayload,
   type McpQaRunResponse,
   type McpServerConfig,
+  type McpSmokeRunResponse,
+  type McpSmokeSuite,
   type McpTool,
   type McpTransport,
 } from "~/api/mcpDocsApi"
@@ -148,6 +155,7 @@ export default function McpDocs() {
   const params = useParams<{ projectId: string }>()
   const routeProjectId = params.projectId ?? null
   const isBugsRoute = Boolean(routeProjectId && location.pathname.endsWith("/bugs"))
+  const isSmokeRoute = Boolean(routeProjectId && location.pathname.endsWith("/smoke"))
   const [projects, setProjects] = useState<McpProject[]>([])
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
   const [projectName, setProjectName] = useState("montemauro")
@@ -177,6 +185,11 @@ export default function McpDocs() {
   const [qaRunningTool, setQaRunningTool] = useState<string | null>(null)
   const [qaRun, setQaRun] = useState<McpQaRunResponse | null>(null)
   const [lastQaPayload, setLastQaPayload] = useState<McpQaRunPayload | null>(null)
+  const [smokeSuite, setSmokeSuite] = useState<McpSmokeSuite | null>(null)
+  const [smokeRun, setSmokeRun] = useState<McpSmokeRunResponse | null>(null)
+  const [smokeLoading, setSmokeLoading] = useState(false)
+  const [smokeGenerating, setSmokeGenerating] = useState(false)
+  const [smokeRunning, setSmokeRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
@@ -191,6 +204,32 @@ export default function McpDocs() {
     refreshDocs(routeProjectId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, navigate, routeProjectId])
+
+  useEffect(() => {
+    if (!isSmokeRoute || !routeProjectId) {
+      setSmokeRun(null)
+      return
+    }
+    let cancelled = false
+    setSmokeLoading(true)
+    setError(null)
+    getMcpSmoke(routeProjectId)
+      .then((data) => {
+        if (cancelled) return
+        setSmokeSuite(data.suite ?? null)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setError(err instanceof Error ? err.message : "Error loading smoke suite")
+      })
+      .finally(() => {
+        if (cancelled) return
+        setSmokeLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isSmokeRoute, routeProjectId])
 
   const docCount = useMemo(() => docs.length, [docs])
 
@@ -439,6 +478,7 @@ export default function McpDocs() {
     try {
       const payload: McpQaRunPayload = {
         projectId: activeProjectId,
+        toolName,
         save,
         maxCasesPerTool,
         sampleArgsByTool: buildSampleArgsPayload(),
@@ -468,6 +508,46 @@ export default function McpDocs() {
       setError(err instanceof Error ? err.message : "Error running MCP QA")
     } finally {
       setQaRunningTool(null)
+    }
+  }
+
+  async function handleGenerateSmoke() {
+    if (!routeProjectId) return
+    setError(null)
+    setSuccess(null)
+    setSmokeGenerating(true)
+    try {
+      const data = await generateMcpSmoke(routeProjectId, {})
+      setSmokeSuite(data.suite ?? null)
+      setSuccess(
+        `Smoke suite generated with ${data.suite?.cases?.length ?? 0} case${
+          (data.suite?.cases?.length ?? 0) === 1 ? "" : "s"
+        }`
+      )
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Error generating smoke suite"
+      )
+    } finally {
+      setSmokeGenerating(false)
+    }
+  }
+
+  async function handleRunSmoke() {
+    if (!routeProjectId) return
+    setError(null)
+    setSuccess(null)
+    setSmokeRunning(true)
+    try {
+      const data = await runMcpSmoke(routeProjectId)
+      setSmokeRun(data)
+      setSuccess(
+        `Smoke run: ${data.summary.ok}/${data.summary.total} ok, ${data.summary.broken} broken`
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error running smoke suite")
+    } finally {
+      setSmokeRunning(false)
     }
   }
 
@@ -593,7 +673,13 @@ export default function McpDocs() {
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(320px,420px)_1fr] gap-4 items-start">
+        <div
+          className={cn(
+            "grid grid-cols-1 gap-4 items-start",
+            !isSmokeRoute && !isBugsRoute && "xl:grid-cols-[minmax(320px,420px)_1fr]"
+          )}
+        >
+          {!isSmokeRoute && !isBugsRoute && (
           <Card className="bg-white/[0.03] border-white/10 text-white">
             <CardHeader>
               <div className="flex items-center gap-2">
@@ -829,6 +915,7 @@ export default function McpDocs() {
               )}
             </CardContent>
           </Card>
+          )}
 
           <section className="min-w-0">
             <div className="flex items-center justify-between mb-3">
@@ -841,12 +928,20 @@ export default function McpDocs() {
                 </p>
               </div>
               {activeProjectId && (
-                <Link
-                  to={`/mcp-docs/${activeProjectId}/bugs`}
-                  className="text-xs text-blue-300 hover:text-blue-200"
-                >
-                  Project Bugs
-                </Link>
+                <div className="flex items-center gap-3">
+                  <Link
+                    to={`/mcp-docs/${activeProjectId}/smoke`}
+                    className="text-xs text-blue-300 hover:text-blue-200"
+                  >
+                    Smoke
+                  </Link>
+                  <Link
+                    to={`/mcp-docs/${activeProjectId}/bugs`}
+                    className="text-xs text-blue-300 hover:text-blue-200"
+                  >
+                    Project Bugs
+                  </Link>
+                </div>
               )}
             </div>
 
@@ -856,7 +951,7 @@ export default function McpDocs() {
               </div>
             )}
 
-            {!refreshing && !projectLoading && !isBugsRoute && docs.length === 0 && (
+            {!refreshing && !projectLoading && !isBugsRoute && !isSmokeRoute && docs.length === 0 && (
               <EmptyState onGenerateFocus={() => window.scrollTo({ top: 0, behavior: "smooth" })} />
             )}
 
@@ -864,7 +959,19 @@ export default function McpDocs() {
               <ProjectBugs bugs={bugs} onStatusChange={handleBugStatus} />
             )}
 
-            {!projectLoading && !isBugsRoute && docs.length > 0 && (
+            {!projectLoading && isSmokeRoute && (
+              <SmokeSuitePanel
+                suite={smokeSuite}
+                run={smokeRun}
+                loading={smokeLoading}
+                generating={smokeGenerating}
+                running={smokeRunning}
+                onGenerate={handleGenerateSmoke}
+                onRun={handleRunSmoke}
+              />
+            )}
+
+            {!projectLoading && !isBugsRoute && !isSmokeRoute && docs.length > 0 && (
               <div className="space-y-3">
                 {docs.map((doc) => (
                   <McpDocCard
@@ -910,6 +1017,244 @@ function EmptyState({ onGenerateFocus }: { onGenerateFocus: () => void }) {
         </Button>
       </div>
     </div>
+  )
+}
+
+function SmokeSuitePanel({
+  suite,
+  run,
+  loading,
+  generating,
+  running,
+  onGenerate,
+  onRun,
+}: {
+  suite: McpSmokeSuite | null
+  run: McpSmokeRunResponse | null
+  loading: boolean
+  generating: boolean
+  running: boolean
+  onGenerate: () => void
+  onRun: () => void
+}) {
+  if (loading && !suite) {
+    return (
+      <div className="flex items-center justify-center py-24 rounded-xl border border-white/10 bg-white/[0.03]">
+        <Loader2 className="h-6 w-6 animate-spin text-white/30" />
+      </div>
+    )
+  }
+
+  const cases = suite?.cases ?? []
+  const results = run?.results ?? []
+  const summary = run?.summary
+
+  return (
+    <section
+      id="smoke-suite"
+      className="rounded-xl border border-white/10 bg-white/[0.03] p-5 scroll-mt-6 space-y-4"
+    >
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Flame className="h-4 w-4 text-orange-300" />
+            <h3 className="text-sm font-medium text-white">Smoke suite</h3>
+          </div>
+          <p className="text-xs text-white/40 mt-0.5">
+            {suite
+              ? `${cases.length} case${cases.length !== 1 ? "s" : ""}${
+                  suite.generatedBy?.provider
+                    ? ` · ${suite.generatedBy.provider}${
+                        suite.generatedBy.model
+                          ? `/${suite.generatedBy.model}`
+                          : ""
+                      }`
+                    : ""
+                }`
+              : "No suite generated yet."}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {suite ? (
+            <>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={onGenerate}
+                disabled={generating || running}
+                className="h-8 border-white/20 text-white/80 hover:text-white hover:bg-white/10 hover:border-white/30 gap-1.5"
+              >
+                {generating ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+                Regenerate
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={onRun}
+                disabled={running || generating}
+                className="h-8 bg-blue-600 hover:bg-blue-500 text-white gap-1.5"
+              >
+                {running ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Play className="h-3.5 w-3.5" />
+                )}
+                Run smoke
+              </Button>
+            </>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              onClick={onGenerate}
+              disabled={generating}
+              className="h-8 bg-blue-600 hover:bg-blue-500 text-white gap-1.5"
+            >
+              {generating ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <WandSparkles className="h-3.5 w-3.5" />
+              )}
+              Create smoke
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {summary && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="rounded-md border border-white/15 bg-white/5 px-2 py-1 text-xs text-white/70 font-mono">
+            {summary.ok}/{summary.total} ok
+          </span>
+          <span
+            className={cn(
+              "rounded-md border px-2 py-1 text-xs font-mono",
+              summary.broken > 0
+                ? "border-red-500/30 bg-red-500/10 text-red-300"
+                : "border-green-500/30 bg-green-500/10 text-green-300"
+            )}
+          >
+            {summary.broken} broken
+          </span>
+        </div>
+      )}
+
+      {!suite && !loading && (
+        <div className="rounded-lg border border-white/10 bg-white/[0.02] px-4 py-6 text-center">
+          <p className="text-sm text-white/60">
+            No smoke suite for this project yet.
+          </p>
+          <p className="text-xs text-white/40 mt-1">
+            Click <span className="text-white/70">Create smoke</span> to
+            generate one.
+          </p>
+        </div>
+      )}
+
+      {suite && results.length === 0 && (
+        <div className="rounded-md border border-white/10 overflow-hidden">
+          <div className="px-3 py-2 text-xs text-white/40 uppercase tracking-wider bg-white/[0.02] border-b border-white/10">
+            Cases
+          </div>
+          <div className="divide-y divide-white/10">
+            {cases.map((c, index) => (
+              <div
+                key={`${c.name}-${index}`}
+                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2.5"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm text-white/85 truncate">{c.name}</p>
+                  <p className="text-[11px] text-white/45 font-mono truncate">
+                    {c.expectedTool}
+                  </p>
+                </div>
+                <span className="rounded border border-white/15 bg-white/5 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/50">
+                  pending
+                </span>
+              </div>
+            ))}
+            {cases.length === 0 && (
+              <p className="text-sm text-white/40 px-3 py-6 text-center">
+                Suite has no cases.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {suite && results.length > 0 && (
+        <div className="rounded-md border border-white/10 overflow-hidden">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 px-3 py-2 text-xs text-white/40 uppercase tracking-wider bg-white/[0.02] border-b border-white/10">
+            <span>Case</span>
+            <span>Latency</span>
+            <span>Status</span>
+          </div>
+          <div className="divide-y divide-white/10">
+            {results.map((result, index) => (
+              <details key={`${result.caseName}-${index}`} className="group">
+                <summary className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 items-center px-3 py-2.5 cursor-pointer hover:bg-white/[0.04] transition-colors">
+                  <div className="min-w-0">
+                    <p className="text-sm text-white/85 truncate">
+                      {result.caseName}
+                    </p>
+                    <p className="text-[11px] text-white/45 font-mono truncate">
+                      {result.toolName}
+                    </p>
+                  </div>
+                  <span className="text-xs text-white/50 font-mono">
+                    {typeof result.latencyMs === "number"
+                      ? `${result.latencyMs}ms`
+                      : "—"}
+                  </span>
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-mono",
+                      result.status === "ok"
+                        ? "bg-green-500/10 text-green-300"
+                        : "bg-red-500/10 text-red-300"
+                    )}
+                  >
+                    {result.status === "ok" ? (
+                      <CheckCircle2 className="h-3 w-3" />
+                    ) : (
+                      <XCircle className="h-3 w-3" />
+                    )}
+                    {result.status}
+                  </span>
+                </summary>
+                <div className="px-3 pb-4 pt-1 space-y-3 bg-white/[0.02]">
+                  {result.error && (
+                    <p className="text-sm text-red-300 bg-red-500/10 border border-red-500/20 rounded-md px-3 py-2">
+                      {result.error}
+                    </p>
+                  )}
+                  {result.assertions && result.assertions.length > 0 && (
+                    <div>
+                      <h5 className="text-xs text-white/40 uppercase tracking-wider mb-1.5">
+                        Assertions
+                      </h5>
+                      <ul className="space-y-1 text-xs text-white/65 list-disc list-inside">
+                        {result.assertions.map((a, i) => (
+                          <li key={i}>{a}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {result.response !== undefined && result.response !== null && (
+                    <JsonBlock title="Response" value={result.response} />
+                  )}
+                </div>
+              </details>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
   )
 }
 
