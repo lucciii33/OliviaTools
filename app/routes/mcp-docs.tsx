@@ -41,9 +41,12 @@ import {
   type McpDoc,
   type McpProject,
   type McpProjectBug,
+  type McpQaBug,
+  type McpQaResult,
   type McpQaRunPayload,
   type McpQaRunResponse,
   type McpServerConfig,
+  type McpSmokeResult,
   type McpSmokeRunResponse,
   type McpSmokeSuite,
   type McpTool,
@@ -184,7 +187,6 @@ export default function McpDocs() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [qaRunningTool, setQaRunningTool] = useState<string | null>(null)
   const [qaRun, setQaRun] = useState<McpQaRunResponse | null>(null)
-  const [lastQaPayload, setLastQaPayload] = useState<McpQaRunPayload | null>(null)
   const [smokeSuite, setSmokeSuite] = useState<McpSmokeSuite | null>(null)
   const [smokeRun, setSmokeRun] = useState<McpSmokeRunResponse | null>(null)
   const [smokeLoading, setSmokeLoading] = useState(false)
@@ -260,7 +262,6 @@ export default function McpDocs() {
       setTools([])
       setBugs([])
       setQaRun(null)
-      setLastQaPayload(null)
     }
   }
 
@@ -483,7 +484,6 @@ export default function McpDocs() {
         maxCasesPerTool,
         sampleArgsByTool: buildSampleArgsPayload(),
       }
-      setLastQaPayload(payload)
       const data = await runMcpQa(payload)
       const results = Array.isArray(data.results) ? data.results : []
       const bugs = Array.isArray(data.bugs) ? data.bugs : []
@@ -980,7 +980,6 @@ export default function McpDocs() {
                     openBugCount={getOpenBugCountForDoc(doc, tools, bugs)}
                     deleting={deletingId === doc._id}
                     qaRun={qaRun}
-                    qaPayload={lastQaPayload}
                     qaRunning={qaRunningTool === doc.toolName}
                     onRunQa={() => handleRunQa(doc.toolName)}
                     onDelete={() => handleDelete(doc)}
@@ -1062,15 +1061,7 @@ function SmokeSuitePanel({
           </div>
           <p className="text-xs text-white/40 mt-0.5">
             {suite
-              ? `${cases.length} case${cases.length !== 1 ? "s" : ""}${
-                  suite.generatedBy?.provider
-                    ? ` · ${suite.generatedBy.provider}${
-                        suite.generatedBy.model
-                          ? `/${suite.generatedBy.model}`
-                          : ""
-                      }`
-                    : ""
-                }`
+              ? `${cases.length} case${cases.length !== 1 ? "s" : ""}`
               : "No suite generated yet."}
           </p>
         </div>
@@ -1157,104 +1148,153 @@ function SmokeSuitePanel({
       )}
 
       {suite && results.length === 0 && (
-        <div className="rounded-md border border-white/10 overflow-hidden">
-          <div className="px-3 py-2 text-xs text-white/40 uppercase tracking-wider bg-white/[0.02] border-b border-white/10">
-            Cases
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h4 className="text-[10px] text-white/45 uppercase tracking-wider">
+              Preview · {cases.length} case{cases.length !== 1 ? "s" : ""}
+            </h4>
+            <span className="text-[11px] text-white/35">
+              Run smoke to execute
+            </span>
           </div>
-          <div className="divide-y divide-white/10">
-            {cases.map((c, index) => (
-              <div
-                key={`${c.name}-${index}`}
-                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2.5"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm text-white/85 truncate">{c.name}</p>
-                  <p className="text-[11px] text-white/45 font-mono truncate">
-                    {c.expectedTool}
-                  </p>
+          {cases.length === 0 ? (
+            <p className="text-sm text-white/40 rounded-md border border-white/10 bg-white/[0.02] px-3 py-6 text-center">
+              Suite has no cases.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {cases.map((c, index) => (
+                <div
+                  key={`${c.name}-${index}`}
+                  className="rounded-lg border border-white/10 bg-white/[0.02] p-3"
+                >
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <p className="text-sm font-medium text-white truncate">
+                      {c.name}
+                    </p>
+                    <span className="rounded border border-blue-500/25 bg-blue-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-blue-200 font-mono">
+                      {c.expectedTool}
+                    </span>
+                  </div>
+                  {c.expectedArgs && Object.keys(c.expectedArgs).length > 0 ? (
+                    <div className="mt-2">
+                      <h5 className="text-[10px] text-white/40 uppercase tracking-wider mb-1">
+                        Expected args
+                      </h5>
+                      <pre className="overflow-x-auto rounded-md border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/65">
+                        {JSON.stringify(c.expectedArgs, null, 2)}
+                      </pre>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-[11px] text-white/35 italic">
+                      No args
+                    </p>
+                  )}
+                  {c.assertions && c.assertions.length > 0 && (
+                    <ul className="mt-2 space-y-0.5 text-[11px] text-white/55 list-disc list-inside">
+                      {c.assertions.map((a, i) => (
+                        <li key={i}>{a}</li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
-                <span className="rounded border border-white/15 bg-white/5 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/50">
-                  pending
-                </span>
-              </div>
-            ))}
-            {cases.length === 0 && (
-              <p className="text-sm text-white/40 px-3 py-6 text-center">
-                Suite has no cases.
-              </p>
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {suite && results.length > 0 && (
-        <div className="rounded-md border border-white/10 overflow-hidden">
-          <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 px-3 py-2 text-xs text-white/40 uppercase tracking-wider bg-white/[0.02] border-b border-white/10">
-            <span>Case</span>
-            <span>Latency</span>
-            <span>Status</span>
-          </div>
-          <div className="divide-y divide-white/10">
+        <div className="space-y-2">
+          <h4 className="text-[10px] text-white/45 uppercase tracking-wider">
+            Results · {results.length}
+          </h4>
+          <div className="space-y-2">
             {results.map((result, index) => (
-              <details key={`${result.caseName}-${index}`} className="group">
-                <summary className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 items-center px-3 py-2.5 cursor-pointer hover:bg-white/[0.04] transition-colors">
-                  <div className="min-w-0">
-                    <p className="text-sm text-white/85 truncate">
-                      {result.caseName}
-                    </p>
-                    <p className="text-[11px] text-white/45 font-mono truncate">
-                      {result.toolName}
-                    </p>
-                  </div>
-                  <span className="text-xs text-white/50 font-mono">
-                    {typeof result.latencyMs === "number"
-                      ? `${result.latencyMs}ms`
-                      : "—"}
-                  </span>
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-mono",
-                      result.status === "ok"
-                        ? "bg-green-500/10 text-green-300"
-                        : "bg-red-500/10 text-red-300"
-                    )}
-                  >
-                    {result.status === "ok" ? (
-                      <CheckCircle2 className="h-3 w-3" />
-                    ) : (
-                      <XCircle className="h-3 w-3" />
-                    )}
-                    {result.status}
-                  </span>
-                </summary>
-                <div className="px-3 pb-4 pt-1 space-y-3 bg-white/[0.02]">
-                  {result.error && (
-                    <p className="text-sm text-red-300 bg-red-500/10 border border-red-500/20 rounded-md px-3 py-2">
-                      {result.error}
-                    </p>
-                  )}
-                  {result.assertions && result.assertions.length > 0 && (
-                    <div>
-                      <h5 className="text-xs text-white/40 uppercase tracking-wider mb-1.5">
-                        Assertions
-                      </h5>
-                      <ul className="space-y-1 text-xs text-white/65 list-disc list-inside">
-                        {result.assertions.map((a, i) => (
-                          <li key={i}>{a}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {result.response !== undefined && result.response !== null && (
-                    <JsonBlock title="Response" value={result.response} />
-                  )}
-                </div>
-              </details>
+              <SmokeResultCard
+                key={`${result.caseName}-${index}`}
+                result={result}
+              />
             ))}
           </div>
         </div>
       )}
     </section>
+  )
+}
+
+function SmokeResultCard({ result }: { result: McpSmokeResult }) {
+  const isOk = result.status === "ok"
+  const accent = isOk ? "border-green-500/20" : "border-red-500/25"
+  const statusPill = cn(
+    "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-mono uppercase tracking-wider",
+    isOk ? "bg-green-500/10 text-green-300" : "bg-red-500/10 text-red-300"
+  )
+
+  return (
+    <details
+      className={cn("group rounded-lg border bg-white/[0.02]", accent)}
+      open={!isOk}
+    >
+      <summary className="cursor-pointer list-none px-4 py-3 hover:bg-white/[0.03] transition-colors">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              {isOk ? (
+                <CheckCircle2 className="h-4 w-4 text-green-400 shrink-0" />
+              ) : (
+                <XCircle className="h-4 w-4 text-red-400 shrink-0" />
+              )}
+              <p className="text-sm font-medium text-white truncate">
+                {result.caseName}
+              </p>
+            </div>
+            <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+              {result.toolName && (
+                <span className="text-[11px] text-white/45 font-mono truncate">
+                  {result.toolName}
+                </span>
+              )}
+              {typeof result.latencyMs === "number" && (
+                <span className="text-[11px] text-white/40 font-mono">
+                  {result.latencyMs}ms
+                </span>
+              )}
+            </div>
+          </div>
+          <span className={statusPill}>{result.status}</span>
+        </div>
+      </summary>
+
+      <div className="px-4 pb-4 pt-2 space-y-3 border-t border-white/5">
+        {result.error && (
+          <div className="rounded-md border border-red-500/25 bg-red-500/10 px-3 py-2">
+            <h5 className="text-[10px] text-red-300/80 uppercase tracking-wider mb-1">
+              Error
+            </h5>
+            <p className="text-sm text-red-200 leading-relaxed">{result.error}</p>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <CodePanel title="Args" value={result.args ?? {}} empty="No args" />
+          <CodePanel title="Response" value={result.response} empty="No response" />
+        </div>
+
+        {result.assertions && result.assertions.length > 0 && (
+          <div>
+            <h5 className="text-[10px] text-white/45 uppercase tracking-wider mb-1.5">
+              Assertions
+            </h5>
+            <ul className="space-y-0.5 text-xs text-white/65 list-disc list-inside">
+              {result.assertions.map((a, i) => (
+                <li key={i}>{a}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </details>
   )
 }
 
@@ -1342,7 +1382,6 @@ function McpDocCard({
   openBugCount,
   deleting,
   qaRun,
-  qaPayload,
   qaRunning,
   onRunQa,
   onDelete,
@@ -1351,7 +1390,6 @@ function McpDocCard({
   openBugCount: number
   deleting: boolean
   qaRun: McpQaRunResponse | null
-  qaPayload: McpQaRunPayload | null
   qaRunning: boolean
   onRunQa: () => void
   onDelete: () => void
@@ -1500,11 +1538,7 @@ function McpDocCard({
       )}
 
       {qaRun && (
-        <McpQaPanel
-          summary={qaRun.summary}
-          results={qaResults}
-          payload={qaPayload}
-        />
+        <McpQaPanel summary={qaRun.summary} results={qaResults} />
       )}
 
       <div className="mt-3">
@@ -1611,11 +1645,9 @@ function McpDocCard({
 function McpQaPanel({
   summary,
   results,
-  payload,
 }: {
   summary: NonNullable<McpQaRunResponse["summary"]> | undefined
   results: NonNullable<McpQaRunResponse["results"]>
-  payload: McpQaRunPayload | null
 }) {
   const safeSummary =
     summary ?? {
@@ -1644,83 +1676,214 @@ function McpQaPanel({
                 : "border-green-500/30 bg-green-500/10 text-green-300"
             )}
           >
-            {safeSummary.bugs} bugs
+            {safeSummary.bugs} bug{safeSummary.bugs === 1 ? "" : "s"}
           </span>
         </div>
       </div>
 
-      {payload && <JsonBlock title="QA request body" value={payload} />}
-
-      <div className="rounded-md border border-white/10 overflow-hidden">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 px-3 py-2 text-xs text-white/40 uppercase tracking-wider bg-white/[0.02] border-b border-white/10">
-          <span>Test</span>
-          <span>Category</span>
-          <span>Verdict</span>
+      {results.length === 0 ? (
+        <div className="rounded-md border border-white/10 bg-white/[0.02] px-4 py-6 text-center">
+          <p className="text-sm text-white/40">No QA results for this tool.</p>
         </div>
-        <div className="divide-y divide-white/10">
+      ) : (
+        <div className="space-y-2">
           {results.map((result, index) => (
-            <details key={`${result.name}-${index}`} className="group">
-              <summary className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 items-center px-3 py-2.5 cursor-pointer hover:bg-white/[0.04] transition-colors">
-                <span className="text-sm text-white/85 truncate">
-                  {result.name}
-                </span>
-                <span className="rounded border border-white/15 bg-white/5 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/50">
-                  {result.category}
-                </span>
-                <span
-                  className={cn(
-                    "rounded px-2 py-0.5 text-xs font-mono",
-                    result.verdict === "fail"
-                      ? "bg-red-500/10 text-red-300"
-                      : result.verdict === "warn"
-                      ? "bg-yellow-500/10 text-yellow-300"
-                      : "bg-green-500/10 text-green-300"
-                  )}
-                >
-                  {result.verdict ?? "unknown"}
-                </span>
-              </summary>
-              <div className="px-3 pb-4 pt-1 space-y-3 bg-white/[0.02]">
-                {result.reasoning && (
-                  <p className="text-xs text-white/60 italic">
-                    {result.reasoning}
-                  </p>
-                )}
-                {result.args && <JsonBlock title="QA args" value={result.args} />}
-                {result.execution?.error && (
-                  <p className="text-sm text-red-300 bg-red-500/10 border border-red-500/20 rounded-md px-3 py-2">
-                    {result.execution.error}
-                  </p>
-                )}
-                {result.execution?.response !== undefined && (
-                  <JsonBlock
-                    title="Execution response"
-                    value={result.execution.response}
-                  />
-                )}
-                {result.execution?.rawToolResponse !== undefined && (
-                  <JsonBlock
-                    title="Execution raw response"
-                    value={result.execution.rawToolResponse}
-                  />
-                )}
-                {result.execution?.responseSchema !== undefined && (
-                  <JsonBlock
-                    title="Execution response schema"
-                    value={result.execution.responseSchema}
-                  />
-                )}
-                {result.bug && <JsonBlock title="Bug details" value={result.bug} />}
-              </div>
-            </details>
+            <QaResultCard key={`${result.name}-${index}`} result={result} />
           ))}
-          {results.length === 0 && (
-            <p className="text-sm text-white/40 px-3 py-6 text-center">
-              No QA results for this tool.
+        </div>
+      )}
+    </div>
+  )
+}
+
+function QaResultCard({ result }: { result: McpQaResult }) {
+  const verdict = (result.verdict ?? "unknown").toLowerCase()
+  const isFail = verdict === "fail"
+  const isWarn = verdict === "warn"
+  const isPass = verdict === "pass"
+  const accent = isFail
+    ? "border-red-500/25"
+    : isWarn
+    ? "border-yellow-500/25"
+    : isPass
+    ? "border-green-500/20"
+    : "border-white/10"
+  const verdictPill = cn(
+    "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-mono uppercase tracking-wider",
+    isFail
+      ? "bg-red-500/10 text-red-300"
+      : isWarn
+      ? "bg-yellow-500/10 text-yellow-200"
+      : isPass
+      ? "bg-green-500/10 text-green-300"
+      : "bg-white/5 text-white/50"
+  )
+  const bug =
+    result.bug && typeof result.bug === "object"
+      ? (result.bug as McpQaBug)
+      : null
+  const latency = result.execution?.latencyMs
+  const error = result.execution?.error
+  const response = result.execution?.response
+
+  return (
+    <details className={cn("group rounded-lg border bg-white/[0.02]", accent)} open={isFail}>
+      <summary className="cursor-pointer list-none px-4 py-3 hover:bg-white/[0.03] transition-colors">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              {isFail ? (
+                <XCircle className="h-4 w-4 text-red-400 shrink-0" />
+              ) : isWarn ? (
+                <AlertTriangle className="h-4 w-4 text-yellow-300 shrink-0" />
+              ) : isPass ? (
+                <CheckCircle2 className="h-4 w-4 text-green-400 shrink-0" />
+              ) : null}
+              <p className="text-sm font-medium text-white truncate">
+                {result.name}
+              </p>
+            </div>
+            <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+              <span className="rounded border border-white/15 bg-white/5 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/55">
+                {result.category}
+              </span>
+              {result.toolName && (
+                <span className="text-[11px] text-white/45 font-mono truncate">
+                  {result.toolName}
+                </span>
+              )}
+              {typeof latency === "number" && (
+                <span className="text-[11px] text-white/40 font-mono">
+                  {latency}ms
+                </span>
+              )}
+            </div>
+          </div>
+          <span className={verdictPill}>{verdict}</span>
+        </div>
+      </summary>
+
+      <div className="px-4 pb-4 pt-2 space-y-3 border-t border-white/5">
+        {result.reasoning && (
+          <div>
+            <h5 className="text-[10px] text-white/40 uppercase tracking-wider mb-1">
+              Why
+            </h5>
+            <p className="text-sm text-white/75 leading-relaxed">
+              {result.reasoning}
             </p>
+          </div>
+        )}
+
+        {error && (
+          <div className="rounded-md border border-red-500/25 bg-red-500/10 px-3 py-2">
+            <h5 className="text-[10px] text-red-300/80 uppercase tracking-wider mb-1">
+              Error
+            </h5>
+            <p className="text-sm text-red-200 leading-relaxed">{error}</p>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <CodePanel title="Args" value={result.args ?? {}} empty="No args" />
+          <CodePanel title="Response" value={response} empty="No response" />
+        </div>
+
+        {bug && <BugCard bug={bug} />}
+      </div>
+    </details>
+  )
+}
+
+function BugCard({ bug }: { bug: McpQaBug }) {
+  const severity = (bug.severity ?? "").toLowerCase()
+  const severityClass =
+    severity === "critical" || severity === "high"
+      ? "border-red-500/40 bg-red-500/15 text-red-200"
+      : severity === "medium"
+      ? "border-orange-500/35 bg-orange-500/10 text-orange-200"
+      : severity === "low"
+      ? "border-yellow-500/30 bg-yellow-500/10 text-yellow-200"
+      : "border-white/15 bg-white/5 text-white/60"
+
+  return (
+    <div className="rounded-lg border border-red-500/30 bg-red-500/[0.06] p-4">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 min-w-0">
+          <XCircle className="h-4 w-4 text-red-400 shrink-0" />
+          <h5 className="text-sm font-semibold text-red-200 truncate">
+            {bug.title || "Bug"}
+          </h5>
+        </div>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {bug.severity && (
+            <span
+              className={cn(
+                "rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-wider",
+                severityClass
+              )}
+            >
+              {bug.severity}
+            </span>
+          )}
+          {bug.category && (
+            <span className="rounded border border-white/15 bg-white/5 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/55">
+              {bug.category}
+            </span>
           )}
         </div>
       </div>
+      {bug.description && (
+        <p className="mt-2 text-sm text-white/75 leading-relaxed">
+          {bug.description}
+        </p>
+      )}
+      {bug.recommendation && (
+        <div className="mt-3 rounded-md border border-white/10 bg-black/20 px-3 py-2">
+          <h6 className="text-[10px] text-white/40 uppercase tracking-wider mb-1">
+            Recommendation
+          </h6>
+          <p className="text-sm text-white/75 leading-relaxed">
+            {bug.recommendation}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CodePanel({
+  title,
+  value,
+  empty,
+}: {
+  title: string
+  value: unknown
+  empty?: string
+}) {
+  const isEmpty =
+    value === undefined ||
+    value === null ||
+    (typeof value === "object" &&
+      value !== null &&
+      !Array.isArray(value) &&
+      Object.keys(value as Record<string, unknown>).length === 0)
+  return (
+    <div className="rounded-md border border-white/10 bg-black/20">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-white/10">
+        <h5 className="text-[10px] text-white/45 uppercase tracking-wider">
+          {title}
+        </h5>
+      </div>
+      {isEmpty ? (
+        <p className="px-3 py-3 text-xs text-white/35 italic">
+          {empty ?? "—"}
+        </p>
+      ) : (
+        <pre className="overflow-x-auto px-3 py-2.5 text-xs text-white/70 leading-relaxed">
+          {JSON.stringify(value, null, 2)}
+        </pre>
+      )}
     </div>
   )
 }

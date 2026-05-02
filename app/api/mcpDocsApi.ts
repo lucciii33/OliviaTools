@@ -112,6 +112,7 @@ export interface McpSmokeResult {
   status: "ok" | "broken" | string
   latencyMs?: number
   error?: string | null
+  args?: Record<string, unknown>
   response?: unknown
   assertions?: string[]
 }
@@ -154,6 +155,7 @@ export interface McpQaResult {
   execution?: {
     status?: string
     error?: string | null
+    latencyMs?: number
     response?: unknown
     rawToolResponse?: unknown
     responseSchema?: Record<string, unknown>
