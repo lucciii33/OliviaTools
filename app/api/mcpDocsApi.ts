@@ -167,6 +167,13 @@ export interface McpQaResult {
 
 export interface McpQaRunResponse {
   runId?: string
+  _id?: string
+  id?: string
+  serverName?: string
+  serverUrl?: string
+  transport?: McpTransport | string
+  createdAt?: string
+  generatedBy?: { provider?: string; model?: string }
   summary?: {
     total: number
     passed: number
@@ -177,6 +184,24 @@ export interface McpQaRunResponse {
   cases?: unknown[]
   results?: McpQaResult[]
   bugs?: McpQaBug[]
+}
+
+export interface McpQaRunListItem {
+  _id?: string
+  id?: string
+  runId?: string
+  serverName?: string
+  serverUrl?: string
+  transport?: McpTransport | string
+  createdAt?: string
+  generatedBy?: { provider?: string; model?: string }
+  summary?: {
+    total?: number
+    passed?: number
+    failed?: number
+    warned?: number
+    bugs?: number
+  }
 }
 
 export interface GenerateMcpDocsResponse {
@@ -228,6 +253,37 @@ export interface CreateMcpProjectResponse extends McpProjectDetailResponse {
   docsResult?: GenerateMcpDocsResponse
 }
 
+export type McpTrialLimitAction =
+  | "projects"
+  | "docs_generate"
+  | "qa_run"
+  | "smoke_generate"
+  | "smoke_run"
+
+export class McpTrialLimitError extends Error {
+  action?: McpTrialLimitAction | string
+  limit?: number
+  used?: number
+
+  constructor({
+    message,
+    action,
+    limit,
+    used,
+  }: {
+    message: string
+    action?: McpTrialLimitAction | string
+    limit?: number
+    used?: number
+  }) {
+    super(message)
+    this.name = "McpTrialLimitError"
+    this.action = action
+    this.limit = limit
+    this.used = used
+  }
+}
+
 async function readJson<T>(res: Response): Promise<T> {
   const data = await res.json().catch(() => null)
   if (!res.ok) {
@@ -235,6 +291,14 @@ async function readJson<T>(res: Response): Promise<T> {
       data && typeof data === "object" && "message" in data
         ? String(data.message)
         : `Request failed with ${res.status}`
+    if (res.status === 403 && data && typeof data === "object") {
+      throw new McpTrialLimitError({
+        message,
+        action: "action" in data ? String(data.action) : undefined,
+        limit: "limit" in data && typeof data.limit === "number" ? data.limit : undefined,
+        used: "used" in data && typeof data.used === "number" ? data.used : undefined,
+      })
+    }
     throw new Error(message)
   }
   return data as T
@@ -273,6 +337,25 @@ export async function runMcpQa(payload: McpQaRunPayload) {
     body: JSON.stringify(payload),
   })
   return readJson<McpQaRunResponse>(res)
+}
+
+export async function listMcpQaRuns() {
+  const res = await apiFetch("/api/mcp-lab/qa/runs", { cache: "no-store" })
+  return readJson<{ runs: McpQaRunListItem[] }>(res)
+}
+
+export async function getMcpQaRun(id: string) {
+  const res = await apiFetch(`/api/mcp-lab/qa/runs/${encodeURIComponent(id)}`, {
+    cache: "no-store",
+  })
+  return readJson<{ run: McpQaRunResponse }>(res)
+}
+
+export async function deleteMcpQaRun(id: string) {
+  const res = await apiFetch(`/api/mcp-lab/qa/runs/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  })
+  return readJson<{ ok?: boolean; message?: string }>(res)
 }
 
 export async function getMcpSmoke(projectId: string) {
@@ -321,6 +404,13 @@ export async function updateMcpBugStatus(id: string, status: string) {
     body: JSON.stringify({ status }),
   })
   return readJson<{ bug?: McpProjectBug; ok?: boolean }>(res)
+}
+
+export async function deleteMcpBug(id: string) {
+  const res = await apiFetch(`/api/mcp-lab/bugs/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  })
+  return readJson<{ ok?: boolean; message?: string }>(res)
 }
 
 export async function listMcpDocs(params: {

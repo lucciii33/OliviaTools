@@ -1,7 +1,14 @@
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Link, useNavigate } from "react-router"
 import { ArrowRight, BookOpen, Boxes, Server, Settings, Sparkles } from "lucide-react"
 import { Button, buttonVariants } from "~/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog"
 import { useAuth } from "~/context/AuthContext"
 import { cn } from "~/lib/utils"
 
@@ -35,6 +42,7 @@ const options = [
 export default function DashboardSelector() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const [apiSoonOpen, setApiSoonOpen] = useState(false)
 
   useEffect(() => {
     if (!user) navigate("/login", { replace: true })
@@ -91,10 +99,16 @@ export default function DashboardSelector() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {options.map((option) => {
               const Icon = option.icon
+              const isApiOption = option.to === "/docs"
               return (
                 <Link
                   key={option.title}
                   to={option.to}
+                  onClick={(event) => {
+                    if (!isApiOption) return
+                    event.preventDefault()
+                    setApiSoonOpen(true)
+                  }}
                   className="group rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/20 p-5 transition-colors"
                 >
                   <div className="flex items-start justify-between gap-4">
@@ -127,6 +141,26 @@ export default function DashboardSelector() {
 
         </div>
       </main>
+
+      <Dialog open={apiSoonOpen} onOpenChange={setApiSoonOpen}>
+        <DialogContent className="border-white/10 bg-[#101217] text-white">
+          <DialogHeader>
+            <DialogTitle>API Docs is coming soon</DialogTitle>
+            <DialogDescription className="text-white/55 leading-relaxed">
+              You will be able to create your docs and test your API in a few
+              days. Our team is working on this for the MVP.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end">
+            <Button
+              className="bg-cyan-400 text-slate-950 hover:bg-cyan-300"
+              onClick={() => setApiSoonOpen(false)}
+            >
+              Got it
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

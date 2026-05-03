@@ -8,6 +8,7 @@ export default [
   route("accept-invite", "routes/accept-invite.tsx"),
   route("workspace", "routes/workspace.tsx"),
   route("dashboard", "routes/dashboard.tsx"),
+  route("mcp-qa-runs", "routes/mcp-qa-runs.tsx"),
   route("mcp-docs", "routes/mcp-docs.tsx"),
   route("mcp-docs/:projectId", "routes/mcp-docs.$projectId.tsx"),
   route("mcp-docs/:projectId/bugs", "routes/mcp-docs.$projectId.bugs.tsx"),

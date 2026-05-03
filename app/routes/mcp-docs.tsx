@@ -25,16 +25,25 @@ import {
 } from "lucide-react"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog"
 import { Input } from "~/components/ui/input"
 import { useAuth } from "~/context/AuthContext"
 import {
   createMcpProject,
+  deleteMcpBug,
   deleteMcpDoc,
   generateMcpSmoke,
   getMcpProject,
   getMcpSmoke,
   listMcpBugs,
   listMcpProjects,
+  McpTrialLimitError,
   runMcpQa,
   runMcpSmoke,
   updateMcpBugStatus,
@@ -51,6 +60,7 @@ import {
   type McpSmokeSuite,
   type McpTool,
   type McpTransport,
+  type McpTrialLimitAction,
 } from "~/api/mcpDocsApi"
 import { cn } from "~/lib/utils"
 
@@ -174,7 +184,7 @@ export default function McpDocs() {
   const [apiKey, setApiKey] = useState("")
   const [apiKeyHeader, setApiKeyHeader] = useState("")
   const [headers, setHeaders] = useState("")
-  const [maxCasesPerTool, setMaxCasesPerTool] = useState(5)
+  const [maxCasesPerTool, setMaxCasesPerTool] = useState(3)
   const [tools, setTools] = useState<McpTool[]>([])
   const [bugs, setBugs] = useState<McpProjectBug[]>([])
   const [sampleArgsByTool, setSampleArgsByTool] = useState<
@@ -185,6 +195,9 @@ export default function McpDocs() {
   const [refreshing, setRefreshing] = useState(false)
   const [projectLoading, setProjectLoading] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<McpDoc | null>(null)
+  const [bugDeleteTarget, setBugDeleteTarget] = useState<McpProjectBug | null>(null)
+  const [deletingBugId, setDeletingBugId] = useState<string | null>(null)
   const [qaRunningTool, setQaRunningTool] = useState<string | null>(null)
   const [qaRun, setQaRun] = useState<McpQaRunResponse | null>(null)
   const [smokeSuite, setSmokeSuite] = useState<McpSmokeSuite | null>(null)
@@ -194,6 +207,9 @@ export default function McpDocs() {
   const [smokeRunning, setSmokeRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [trialLimits, setTrialLimits] = useState<
+    Partial<Record<McpTrialLimitAction, { message: string; used?: number; limit?: number }>>
+  >({})
 
   const isStdio = transport === "stdio"
   const hasTools = tools.length > 0
@@ -236,6 +252,28 @@ export default function McpDocs() {
   const docCount = useMemo(() => docs.length, [docs])
 
   if (!user) return null
+
+  function handleError(err: unknown, fallback: string) {
+    if (err instanceof McpTrialLimitError) {
+      if (err.action) {
+        setTrialLimits((prev) => ({
+          ...prev,
+          [err.action as McpTrialLimitAction]: {
+            message: err.message,
+            used: err.used,
+            limit: err.limit,
+          },
+        }))
+      }
+      const usage =
+        typeof err.used === "number" && typeof err.limit === "number"
+          ? ` (${err.used}/${err.limit})`
+          : ""
+      setError(`${err.message}${usage}`)
+      return
+    }
+    setError(err instanceof Error ? err.message : fallback)
+  }
 
   async function refreshDocs(projectId = routeProjectId) {
     setRefreshing(true)
@@ -421,7 +459,7 @@ export default function McpDocs() {
         }`
       )
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error creating MCP project")
+      handleError(err, "Error creating MCP project")
     } finally {
       setConnecting(false)
     }
@@ -449,6 +487,12 @@ export default function McpDocs() {
     } finally {
       setDeletingId(null)
     }
+  }
+
+  async function handleConfirmDelete() {
+    if (!deleteTarget) return
+    await handleDelete(deleteTarget)
+    setDeleteTarget(null)
   }
 
   function buildSampleArgsPayload() {
@@ -505,7 +549,7 @@ export default function McpDocs() {
         }`
       )
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error running MCP QA")
+      handleError(err, "Error running MCP QA")
     } finally {
       setQaRunningTool(null)
     }
@@ -525,9 +569,7 @@ export default function McpDocs() {
         }`
       )
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Error generating smoke suite"
-      )
+      handleError(err, "Error generating smoke suite")
     } finally {
       setSmokeGenerating(false)
     }
@@ -545,7 +587,7 @@ export default function McpDocs() {
         `Smoke run: ${data.summary.ok}/${data.summary.total} ok, ${data.summary.broken} broken`
       )
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error running smoke suite")
+      handleError(err, "Error running smoke suite")
     } finally {
       setSmokeRunning(false)
     }
@@ -561,6 +603,21 @@ export default function McpDocs() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error updating bug status")
+    }
+  }
+
+  async function handleConfirmBugDelete() {
+    if (!bugDeleteTarget) return
+    setDeletingBugId(bugDeleteTarget._id)
+    setError(null)
+    try {
+      await deleteMcpBug(bugDeleteTarget._id)
+      setBugs((prev) => prev.filter((bug) => bug._id !== bugDeleteTarget._id))
+      setBugDeleteTarget(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error deleting bug")
+    } finally {
+      setDeletingBugId(null)
     }
   }
 
@@ -583,16 +640,16 @@ export default function McpDocs() {
             Selector
           </Link>
           <Link
-            to="/docs"
-            className="w-full flex items-center gap-2 text-sm px-3 py-2 rounded-md text-white/60 hover:text-white hover:bg-white/5 transition-colors"
-          >
-            API Docs
-          </Link>
-          <Link
             to="/mcp-docs"
             className="w-full flex items-center justify-between gap-2 text-sm px-3 py-2 rounded-md bg-white/10 text-white transition-colors"
           >
             <span>MCP Docs</span>
+          </Link>
+          <Link
+            to="/mcp-qa-runs"
+            className="w-full flex items-center justify-between gap-2 text-sm px-3 py-2 rounded-md text-white/60 hover:text-white hover:bg-white/5 transition-colors"
+          >
+            <span>MCP QA Runs</span>
           </Link>
           <div className="pt-4">
             <p className="text-xs text-white/30 uppercase tracking-wider px-2 mb-2">
@@ -812,18 +869,90 @@ export default function McpDocs() {
                     <label className="text-xs text-white/60">
                       Max cases per tool
                     </label>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={20}
-                      value={maxCasesPerTool}
-                      onChange={(e) =>
-                        setMaxCasesPerTool(Number(e.target.value) || 1)
-                      }
-                      className={fieldClass}
-                    />
+                    <div
+                      className="group relative"
+                      title="Contact your provider so you can get into a pay plan and have unlimited."
+                    >
+                      <div className="flex h-8 w-full items-center rounded-lg border border-white/15 bg-white/[0.035] px-2.5 text-sm text-white/45">
+                        {maxCasesPerTool}
+                      </div>
+                      <div className="absolute inset-0 cursor-not-allowed rounded-lg bg-black/20 ring-1 ring-white/5" />
+                      <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 hidden w-64 rounded-md border border-white/10 bg-[#151821] px-3 py-2 text-xs leading-5 text-white/70 shadow-xl group-hover:block">
+                        Contact your provider so you can get into a pay plan
+                        and have unlimited.
+                      </div>
+                    </div>
                   </div>
                 </details>
+
+                {hasTools && (
+                  <details className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+                    <summary className="cursor-pointer text-xs text-white/60">
+                      Sample args
+                    </summary>
+                    <div className="mt-3 space-y-3">
+                      <p className="text-xs leading-5 text-white/40">
+                        Dynamic fields from each tool input schema. Add real
+                        values so Olivia does not guess arguments. These are
+                        sent to the backend as{" "}
+                        <span className="text-white/65">sampleArgsByTool</span>{" "}
+                        for docs, QA runs, smoke cases, and bug checks.
+                      </p>
+                      {tools.map((tool) => {
+                        const toolName = getToolName(tool)
+                        const fields = getSchemaProperties(tool.inputSchema)
+                        return (
+                          <div
+                            key={toolName}
+                            className="rounded-lg border border-white/10 bg-white/[0.02] p-3"
+                          >
+                            <p className="text-sm font-medium text-white/80">
+                              {toolName}
+                            </p>
+                            {tool.description && (
+                              <p className="text-xs text-white/45 mt-1">
+                                {tool.description}
+                              </p>
+                            )}
+                            {fields.length === 0 ? (
+                              <p className="text-xs text-white/35 mt-2">
+                                No args required.
+                              </p>
+                            ) : (
+                              <div className="mt-3 space-y-2">
+                                {fields.map((field) => (
+                                  <div key={field.name} className="space-y-1.5">
+                                    <label className="text-xs text-white/60">
+                                      {field.name}
+                                      {field.required ? " *" : ""}
+                                    </label>
+                                    <Input
+                                      value={sampleArgsByTool[toolName]?.[field.name] ?? ""}
+                                      onChange={(e) =>
+                                        updateSampleArg(
+                                          toolName,
+                                          field.name,
+                                          e.target.value
+                                        )
+                                      }
+                                      placeholder={field.type}
+                                      className={fieldClass}
+                                    />
+                                    {field.description && (
+                                      <p className="text-xs text-white/35">
+                                        {field.description}
+                                      </p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </details>
+                )}
 
                 {error && (
                   <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-md px-3 py-2">
@@ -839,7 +968,10 @@ export default function McpDocs() {
 
                 <Button
                   type="submit"
-                  disabled={connecting}
+                  disabled={
+                    connecting ||
+                    Boolean(trialLimits.projects || trialLimits.docs_generate)
+                  }
                   className="w-full bg-blue-600 hover:bg-blue-500 text-white gap-1.5"
                 >
                   {connecting ? (
@@ -851,68 +983,6 @@ export default function McpDocs() {
                 </Button>
               </form>
 
-              {hasTools && (
-                <div className="mt-5 pt-5 border-t border-white/10 space-y-3">
-                  <div>
-                    <h3 className="text-sm font-medium text-white">Sample args</h3>
-                    <p className="text-xs text-white/40 mt-0.5">
-                      Add real values for tools that need inputs.
-                    </p>
-                  </div>
-                  {tools.map((tool) => {
-                    const toolName = getToolName(tool)
-                    const fields = getSchemaProperties(tool.inputSchema)
-                    return (
-                      <div
-                        key={toolName}
-                        className="rounded-lg border border-white/10 bg-white/[0.02] p-3"
-                      >
-                        <p className="text-sm font-medium text-white/80">
-                          {toolName}
-                        </p>
-                        {tool.description && (
-                          <p className="text-xs text-white/45 mt-1">
-                            {tool.description}
-                          </p>
-                        )}
-                        {fields.length === 0 ? (
-                          <p className="text-xs text-white/35 mt-2">
-                            No args required.
-                          </p>
-                        ) : (
-                          <div className="mt-3 space-y-2">
-                            {fields.map((field) => (
-                              <div key={field.name} className="space-y-1.5">
-                                <label className="text-xs text-white/60">
-                                  {field.name}
-                                  {field.required ? " *" : ""}
-                                </label>
-                                <Input
-                                  value={sampleArgsByTool[toolName]?.[field.name] ?? ""}
-                                  onChange={(e) =>
-                                    updateSampleArg(
-                                      toolName,
-                                      field.name,
-                                      e.target.value
-                                    )
-                                  }
-                                  placeholder={field.type}
-                                  className={fieldClass}
-                                />
-                                {field.description && (
-                                  <p className="text-xs text-white/35">
-                                    {field.description}
-                                  </p>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
             </CardContent>
           </Card>
           )}
@@ -941,6 +1011,12 @@ export default function McpDocs() {
                   >
                     Project Bugs
                   </Link>
+                  <Link
+                    to="/mcp-qa-runs"
+                    className="text-xs text-blue-300 hover:text-blue-200"
+                  >
+                    QA Runs
+                  </Link>
                 </div>
               )}
             </div>
@@ -956,7 +1032,12 @@ export default function McpDocs() {
             )}
 
             {!projectLoading && isBugsRoute && (
-              <ProjectBugs bugs={bugs} onStatusChange={handleBugStatus} />
+              <ProjectBugs
+                bugs={bugs}
+                deletingBugId={deletingBugId}
+                onStatusChange={handleBugStatus}
+                onDeleteBug={setBugDeleteTarget}
+              />
             )}
 
             {!projectLoading && isSmokeRoute && (
@@ -966,6 +1047,8 @@ export default function McpDocs() {
                 loading={smokeLoading}
                 generating={smokeGenerating}
                 running={smokeRunning}
+                generateLimited={Boolean(trialLimits.smoke_generate)}
+                runLimited={Boolean(trialLimits.smoke_run)}
                 onGenerate={handleGenerateSmoke}
                 onRun={handleRunSmoke}
               />
@@ -981,8 +1064,9 @@ export default function McpDocs() {
                     deleting={deletingId === doc._id}
                     qaRun={qaRun}
                     qaRunning={qaRunningTool === doc.toolName}
+                    qaLimited={Boolean(trialLimits.qa_run)}
                     onRunQa={() => handleRunQa(doc.toolName)}
-                    onDelete={() => handleDelete(doc)}
+                    onDelete={() => setDeleteTarget(doc)}
                   />
                 ))}
               </div>
@@ -990,6 +1074,76 @@ export default function McpDocs() {
           </section>
         </div>
       </main>
+
+      <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="border-white/10 bg-[#101217] text-white">
+          <DialogHeader>
+            <DialogTitle>Are you sure you want to delete?</DialogTitle>
+            <DialogDescription className="text-white/55 leading-relaxed">
+              This will remove{" "}
+              <span className="font-medium text-white">
+                {deleteTarget?.toolName ?? "this tool doc"}
+              </span>{" "}
+              from this MCP project.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              className="text-white/60 hover:bg-white/10 hover:text-white"
+              onClick={() => setDeleteTarget(null)}
+              disabled={Boolean(deleteTarget?._id && deletingId === deleteTarget._id)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => void handleConfirmDelete()}
+              disabled={Boolean(deleteTarget?._id && deletingId === deleteTarget._id)}
+            >
+              {deleteTarget?._id && deletingId === deleteTarget._id ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(bugDeleteTarget)} onOpenChange={(open) => !open && setBugDeleteTarget(null)}>
+        <DialogContent className="border-white/10 bg-[#101217] text-white">
+          <DialogHeader>
+            <DialogTitle>Are you sure you want to delete?</DialogTitle>
+            <DialogDescription className="text-white/55 leading-relaxed">
+              This will permanently delete this bug from the project.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              className="text-white/60 hover:bg-white/10 hover:text-white"
+              onClick={() => setBugDeleteTarget(null)}
+              disabled={Boolean(bugDeleteTarget && deletingBugId === bugDeleteTarget._id)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => void handleConfirmBugDelete()}
+              disabled={Boolean(bugDeleteTarget && deletingBugId === bugDeleteTarget._id)}
+            >
+              {bugDeleteTarget && deletingBugId === bugDeleteTarget._id ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -1025,6 +1179,8 @@ function SmokeSuitePanel({
   loading,
   generating,
   running,
+  generateLimited,
+  runLimited,
   onGenerate,
   onRun,
 }: {
@@ -1033,6 +1189,8 @@ function SmokeSuitePanel({
   loading: boolean
   generating: boolean
   running: boolean
+  generateLimited: boolean
+  runLimited: boolean
   onGenerate: () => void
   onRun: () => void
 }) {
@@ -1073,7 +1231,7 @@ function SmokeSuitePanel({
                 size="sm"
                 variant="outline"
                 onClick={onGenerate}
-                disabled={generating || running}
+                disabled={generating || running || generateLimited}
                 className="h-8 border-white/20 text-white/80 hover:text-white hover:bg-white/10 hover:border-white/30 gap-1.5"
               >
                 {generating ? (
@@ -1087,7 +1245,7 @@ function SmokeSuitePanel({
                 type="button"
                 size="sm"
                 onClick={onRun}
-                disabled={running || generating}
+                disabled={running || generating || runLimited}
                 className="h-8 bg-blue-600 hover:bg-blue-500 text-white gap-1.5"
               >
                 {running ? (
@@ -1103,7 +1261,7 @@ function SmokeSuitePanel({
               type="button"
               size="sm"
               onClick={onGenerate}
-              disabled={generating}
+              disabled={generating || generateLimited}
               className="h-8 bg-blue-600 hover:bg-blue-500 text-white gap-1.5"
             >
               {generating ? (
@@ -1300,10 +1458,14 @@ function SmokeResultCard({ result }: { result: McpSmokeResult }) {
 
 function ProjectBugs({
   bugs,
+  deletingBugId,
   onStatusChange,
+  onDeleteBug,
 }: {
   bugs: McpProjectBug[]
+  deletingBugId: string | null
   onStatusChange: (id: string, status: string) => void
+  onDeleteBug: (bug: McpProjectBug) => void
 }) {
   return (
     <section
@@ -1358,16 +1520,33 @@ function ProjectBugs({
                     </p>
                   )}
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="border-white/20 text-white/80 hover:text-white hover:bg-white/10 shrink-0"
-                  onClick={() => onStatusChange(bug._id, "fixed")}
-                  disabled={bug.status === "fixed"}
-                >
-                  Mark fixed
-                </Button>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="border-white/20 text-white/80 hover:text-white hover:bg-white/10"
+                    onClick={() => onStatusChange(bug._id, "fixed")}
+                    disabled={bug.status === "fixed"}
+                  >
+                    Mark fixed
+                  </Button>
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    className="text-white/35 hover:text-red-300 hover:bg-red-500/10"
+                    onClick={() => onDeleteBug(bug)}
+                    disabled={deletingBugId === bug._id}
+                    title="Delete bug"
+                  >
+                    {deletingBugId === bug._id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3.5 w-3.5" />
+                    )}
+                  </Button>
+                </div>
               </div>
             </div>
           )
@@ -1383,6 +1562,7 @@ function McpDocCard({
   deleting,
   qaRun,
   qaRunning,
+  qaLimited,
   onRunQa,
   onDelete,
 }: {
@@ -1391,6 +1571,7 @@ function McpDocCard({
   deleting: boolean
   qaRun: McpQaRunResponse | null
   qaRunning: boolean
+  qaLimited: boolean
   onRunQa: () => void
   onDelete: () => void
 }) {
@@ -1480,7 +1661,7 @@ function McpDocCard({
           variant="outline"
           size="sm"
           onClick={onRunQa}
-          disabled={qaRunning}
+          disabled={qaRunning || qaLimited}
           className="h-8 border-white/20 text-white/80 hover:text-white hover:bg-white/10 hover:border-white/30 gap-1.5 shrink-0"
         >
           {qaRunning ? (
@@ -1534,7 +1715,10 @@ function McpDocCard({
       )}
 
       {hasRawResponse && (
-        <JsonBlock title="Raw MCP response" value={doc.rawToolResponse} />
+        <CollapsibleJsonBlock
+          title="Raw MCP response"
+          value={doc.rawToolResponse}
+        />
       )}
 
       {qaRun && (
@@ -1917,5 +2101,29 @@ function JsonBlock({ title, value }: { title: string; value: unknown }) {
         {JSON.stringify(value, null, 2)}
       </pre>
     </div>
+  )
+}
+
+function CollapsibleJsonBlock({
+  title,
+  value,
+}: {
+  title: string
+  value: unknown
+}) {
+  return (
+    <details className="group mt-3 rounded-lg border border-white/10 bg-white/[0.02]">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-3">
+        <h4 className="text-xs text-white/40 uppercase tracking-wider">
+          {title}
+        </h4>
+        <ChevronDown className="h-4 w-4 text-white/35 transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="border-t border-white/10 p-3">
+        <pre className="max-h-96 overflow-auto rounded-lg border border-white/10 bg-black/20 px-3 py-3 text-xs text-white/65">
+          {JSON.stringify(value, null, 2)}
+        </pre>
+      </div>
+    </details>
   )
 }
