@@ -28,4 +28,5 @@ export function setAuthUser(user: AuthUser): void {
 
 export function removeAuthUser(): void {
   localStorage.removeItem(USER_KEY)
+  localStorage.removeItem("mcp-docs-last-config")
 }

@@ -2,24 +2,23 @@ import { useEffect } from "react"
 import { Link, useNavigate } from "react-router"
 import { ArrowRight, BookOpen, Boxes, Server, Sparkles } from "lucide-react"
 import { Button, buttonVariants } from "~/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card"
 import { useAuth } from "~/context/AuthContext"
 import { cn } from "~/lib/utils"
 
 const options = [
   {
-    title: "API",
-    description: "Generate and browse API docs from GitHub repositories and pull requests.",
+    title: "API Automation",
+    description: "Generate endpoint docs from repositories, backfills, and pull request changes. Run QA against documented endpoints.",
     to: "/docs",
-    action: "Open API Docs",
+    action: "Open API workspace",
     icon: BookOpen,
     accent: "text-blue-400 bg-blue-500/10 border-blue-500/20",
   },
   {
-    title: "MCP",
-    description: "Connect an MCP server, generate tool documentation, and review saved docs.",
+    title: "MCP Automation",
+    description: "Connect live MCP servers, document tools and schemas, create smoke suites, and track tool-level bugs.",
     to: "/mcp-docs",
-    action: "Open MCP Docs",
+    action: "Open MCP workspace",
     icon: Server,
     accent: "text-purple-300 bg-purple-500/10 border-purple-500/20",
   },
@@ -39,8 +38,8 @@ export default function DashboardSelector() {
     <div className="min-h-screen bg-[#0a0a0f] text-white">
       <header className="border-b border-white/10 px-5 md:px-8 py-4 flex items-center justify-between">
         <Link to="/dashboard" className="flex items-center gap-2 text-white/80 hover:text-white transition-colors">
-          <BookOpen className="h-5 w-5 text-blue-400" />
-          <span className="font-semibold text-sm">API Docs</span>
+          <Sparkles className="h-5 w-5 text-cyan-300" />
+          <span className="font-semibold text-sm">Olivia Tool</span>
         </Link>
         <div className="flex items-center gap-3">
           <p className="hidden sm:block text-xs text-white/40 truncate max-w-48">
@@ -62,11 +61,11 @@ export default function DashboardSelector() {
           <div className="mb-6">
             <div className="inline-flex items-center gap-2 text-xs text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-full px-3 py-1 mb-4">
               <Sparkles className="h-3 w-3" />
-              Docs workspace
+              Olivia workspace
             </div>
-            <h1 className="text-xl font-semibold text-white">Choose your docs experience</h1>
+            <h1 className="text-xl font-semibold text-white">Choose what Olivia should automate</h1>
             <p className="text-sm text-white/50 mt-1">
-              Open the existing API documentation workspace or configure MCP tool docs.
+              API automation and MCP automation are separate workflows with different sources, docs, tests, and bug reports.
             </p>
           </div>
 
@@ -107,16 +106,6 @@ export default function DashboardSelector() {
             })}
           </div>
 
-          <Card className="mt-3 bg-white/[0.03] border-white/10 text-white">
-            <CardHeader>
-              <CardTitle className="text-sm">Current API workspace is unchanged</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xs text-white/50">
-                The API option opens the same dashboard and repository documentation flow.
-              </p>
-            </CardContent>
-          </Card>
         </div>
       </main>
     </div>
