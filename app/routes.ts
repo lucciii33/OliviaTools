@@ -3,7 +3,10 @@ import { type RouteConfig, index, route } from "@react-router/dev/routes"
 export default [
   index("routes/home.tsx"),
   route("login", "routes/login.tsx"),
+  route("signup", "routes/signup.tsx"),
   route("register", "routes/register.tsx"),
+  route("accept-invite", "routes/accept-invite.tsx"),
+  route("workspace", "routes/workspace.tsx"),
   route("dashboard", "routes/dashboard.tsx"),
   route("mcp-docs", "routes/mcp-docs.tsx"),
   route("mcp-docs/:projectId", "routes/mcp-docs.$projectId.tsx"),
@@ -11,4 +14,5 @@ export default [
   route("mcp-docs/:projectId/smoke", "routes/mcp-docs.$projectId.smoke.tsx"),
   route("docs", "routes/docs.tsx"),
   route("docs/:owner/:repo", "routes/docs.$owner.$repo.tsx"),
+  route("*", "routes/catch-all.tsx"),
 ] satisfies RouteConfig

@@ -1,5 +1,11 @@
 import { createContext, useContext, useState, type ReactNode } from "react"
-import { type AuthUser, getAuthUser, setAuthUser, removeAuthUser } from "~/auth"
+import {
+  type AuthUser,
+  clearWorkspaceCache,
+  getAuthUser,
+  setAuthUser,
+  removeAuthUser,
+} from "~/auth"
 
 interface AuthContextValue {
   user: AuthUser | null
@@ -13,6 +19,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(() => getAuthUser())
 
   const login = (data: AuthUser) => {
+    clearWorkspaceCache()
     setAuthUser(data)
     setUser(data)
   }

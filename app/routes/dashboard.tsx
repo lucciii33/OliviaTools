@@ -1,6 +1,6 @@
 import { useEffect } from "react"
 import { Link, useNavigate } from "react-router"
-import { ArrowRight, BookOpen, Boxes, Server, Sparkles } from "lucide-react"
+import { ArrowRight, BookOpen, Boxes, Server, Settings, Sparkles } from "lucide-react"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { useAuth } from "~/context/AuthContext"
 import { cn } from "~/lib/utils"
@@ -21,6 +21,14 @@ const options = [
     action: "Open MCP workspace",
     icon: Server,
     accent: "text-purple-300 bg-purple-500/10 border-purple-500/20",
+  },
+  {
+    title: "Workspace Members",
+    description: "Invite teammates, review pending invitations, and manage who has access to this workspace.",
+    to: "/workspace",
+    action: "Manage members",
+    icon: Settings,
+    accent: "text-cyan-300 bg-cyan-500/10 border-cyan-500/20",
   },
 ]
 
@@ -44,7 +52,18 @@ export default function DashboardSelector() {
         <div className="flex items-center gap-3">
           <p className="hidden sm:block text-xs text-white/40 truncate max-w-48">
             {user.firstName} {user.lastName}
+            {user.role ? ` · ${user.role}` : ""}
           </p>
+          <Link
+            to="/workspace"
+            className={cn(
+              buttonVariants({ variant: "ghost", size: "sm" }),
+              "text-white/50 hover:text-white hover:bg-white/10 gap-1.5"
+            )}
+          >
+            <Settings className="h-3.5 w-3.5" />
+            Workspace
+          </Link>
           <Button
             variant="ghost"
             size="sm"
@@ -69,7 +88,7 @@ export default function DashboardSelector() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {options.map((option) => {
               const Icon = option.icon
               return (

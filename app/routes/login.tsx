@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react"
-import { Link, Navigate, useNavigate } from "react-router"
-import { BookOpen } from "lucide-react"
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router"
+import { Sparkles } from "lucide-react"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "~/components/ui/card"
@@ -10,13 +10,26 @@ import { loginApi } from "~/api/authApi"
 export default function Login() {
   const { login, user } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const inviteToken = searchParams.get("token")?.trim()
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  if (user) return <Navigate to="/dashboard" replace />
+  if (user) {
+    return (
+      <Navigate
+        to={
+          inviteToken
+            ? `/accept-invite?token=${encodeURIComponent(inviteToken)}`
+            : "/dashboard"
+        }
+        replace
+      />
+    )
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -25,7 +38,12 @@ export default function Login() {
     try {
       const data = await loginApi({ email, password })
       login(data)
-      navigate("/dashboard", { replace: true })
+      navigate(
+        inviteToken
+          ? `/accept-invite?token=${encodeURIComponent(inviteToken)}`
+          : "/dashboard",
+        { replace: true }
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed")
     } finally {
@@ -36,14 +54,16 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-[#0a0a0f] flex flex-col items-center justify-center px-4">
       <Link to="/" className="flex items-center gap-2 mb-8 text-white/70 hover:text-white transition-colors">
-        <BookOpen className="h-5 w-5 text-blue-400" />
-        <span className="font-semibold text-sm">API Docs</span>
+        <Sparkles className="h-5 w-5 text-cyan-300" />
+        <span className="font-semibold text-sm">Olivia Tool</span>
       </Link>
 
       <Card className="w-full max-w-sm bg-white/5 border-white/10 text-white">
         <CardHeader className="pb-4">
           <CardTitle className="text-xl">Welcome back</CardTitle>
-          <CardDescription className="text-white/50">Log in to your account</CardDescription>
+          <CardDescription className="text-white/50">
+            {inviteToken ? "Log in to accept your workspace invite" : "Log in to your account"}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -81,13 +101,16 @@ export default function Login() {
               disabled={loading}
               className="w-full bg-blue-600 hover:bg-blue-500 text-white"
             >
-              {loading ? "Signing in…" : "Sign in"}
+              {loading ? "Signing in..." : "Sign in"}
             </Button>
           </form>
 
           <p className="text-center text-xs text-white/40 mt-4">
             Don&apos;t have an account?{" "}
-            <Link to="/register" className="text-blue-400 hover:text-blue-300 underline">
+            <Link
+              to={inviteToken ? `/signup?token=${encodeURIComponent(inviteToken)}` : "/signup"}
+              className="text-blue-400 hover:text-blue-300 underline"
+            >
               Register
             </Link>
           </p>

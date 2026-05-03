@@ -3,6 +3,7 @@ import {
   Links,
   Meta,
   Outlet,
+  redirect,
   Scripts,
   ScrollRestoration,
 } from "react-router"
@@ -10,6 +11,15 @@ import {
 import type { Route } from "./+types/root"
 import { AuthProvider } from "~/context/AuthContext"
 import "./app.css"
+
+export function loader({ request }: Route.LoaderArgs) {
+  const url = new URL(request.url)
+  if (url.pathname.startsWith("//")) {
+    url.pathname = `/${url.pathname.replace(/^\/+/, "")}`
+    return redirect(`${url.pathname}${url.search}`)
+  }
+  return null
+}
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (

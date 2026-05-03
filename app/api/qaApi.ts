@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { getAuthToken } from "~/auth"
+import { apiFetch } from "~/utils/api"
 
 export type QaAuthType = "none" | "bearer" | "apiKey" | "basic" | "custom"
 
@@ -62,12 +62,6 @@ export interface QaRunSummary {
   createdAt: string
 }
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? ""
-
-function authHeaders(): HeadersInit {
-  return { Authorization: `Bearer ${getAuthToken()}` }
-}
-
 export function useQaApi() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -77,9 +71,8 @@ export function useQaApi() {
     repo: string
   ): Promise<QaConfig | null> => {
     setError(null)
-    const res = await fetch(
-      `${BASE_URL}/api/qa/config/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
-      { headers: authHeaders() }
+    const res = await apiFetch(
+      `/api/qa/config/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`
     )
     if (res.status === 404) return null
     if (!res.ok) {
@@ -95,11 +88,10 @@ export function useQaApi() {
     config: QaConfig
   ): Promise<QaConfig | null> => {
     setError(null)
-    const res = await fetch(
-      `${BASE_URL}/api/qa/config/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
+    const res = await apiFetch(
+      `/api/qa/config/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
       {
         method: "PUT",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify(config),
       }
     )
@@ -114,9 +106,8 @@ export function useQaApi() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${BASE_URL}/api/qa/find-bugs/${docId}`, {
+      const res = await apiFetch(`/api/qa/find-bugs/${docId}`, {
         method: "POST",
-        headers: authHeaders(),
       })
       if (!res.ok) {
         const body = await res.text()
@@ -134,9 +125,7 @@ export function useQaApi() {
 
   const getRuns = async (docId: string): Promise<QaRunSummary[]> => {
     setError(null)
-    const res = await fetch(`${BASE_URL}/api/qa/runs/${docId}`, {
-      headers: authHeaders(),
-    })
+    const res = await apiFetch(`/api/qa/runs/${docId}`)
     if (!res.ok) {
       setError(`Failed to load runs (${res.status})`)
       return []
@@ -146,9 +135,7 @@ export function useQaApi() {
 
   const getRun = async (id: string): Promise<QaRun | null> => {
     setError(null)
-    const res = await fetch(`${BASE_URL}/api/qa/run/${id}`, {
-      headers: authHeaders(),
-    })
+    const res = await apiFetch(`/api/qa/run/${id}`)
     if (!res.ok) {
       setError(`Failed to load run (${res.status})`)
       return null

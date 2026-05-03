@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { BookOpen, Menu } from "lucide-react"
+import { BookOpen, Menu, Settings } from "lucide-react"
 import { Link, useLocation } from "react-router"
 import { Button } from "~/components/ui/button"
 import {
@@ -23,6 +23,7 @@ function SidebarContent() {
   const location = useLocation()
   const { installations, getInstallations } = useInstallationsApi()
   const isAllActive = location.pathname === "/docs"
+  const isWorkspaceActive = location.pathname === "/workspace"
 
   useEffect(() => {
     getInstallations()
@@ -62,9 +63,19 @@ function SidebarContent() {
       </nav>
 
       <div className="px-3 pb-4 border-t border-white/10 pt-4 space-y-2">
+        <Link
+          to="/workspace"
+          className={cn(itemBase, isWorkspaceActive ? itemActive : itemIdle)}
+        >
+          <span className="inline-flex items-center gap-2">
+            <Settings className="h-3.5 w-3.5" />
+            Workspace
+          </span>
+        </Link>
         {user && (
           <p className="text-xs text-white/40 px-2 truncate">
             {user.firstName} {user.lastName}
+            {user.role ? ` · ${user.role}` : ""}
           </p>
         )}
         <Button
