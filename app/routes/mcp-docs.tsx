@@ -38,6 +38,7 @@ import {
   createMcpProject,
   deleteMcpBug,
   deleteMcpDoc,
+  generateMcpDocsForTool,
   generateMcpSmoke,
   getMcpProject,
   getMcpSmoke,
@@ -190,12 +191,22 @@ export default function McpDocs() {
   const [sampleArgsByTool, setSampleArgsByTool] = useState<
     Record<string, Record<string, string>>
   >({})
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set())
+  const toggleSection = (key: string) => {
+    setExpandedSections((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
   const [save, setSave] = useState(true)
   const [connecting, setConnecting] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [projectLoading, setProjectLoading] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<McpDoc | null>(null)
+  const [creatingDocForTool, setCreatingDocForTool] = useState<string | null>(null)
   const [bugDeleteTarget, setBugDeleteTarget] = useState<McpProjectBug | null>(null)
   const [deletingBugId, setDeletingBugId] = useState<string | null>(null)
   const [qaRunningTool, setQaRunningTool] = useState<string | null>(null)
@@ -313,8 +324,19 @@ export default function McpDocs() {
       nextTools.reduce<Record<string, Record<string, string>>>((acc, tool) => {
         const toolName = getToolName(tool)
         const fields = getSchemaProperties(tool.inputSchema)
+        const suggested =
+          tool.suggestedArgs && typeof tool.suggestedArgs === "object"
+            ? (tool.suggestedArgs as Record<string, unknown>)
+            : {}
         acc[toolName] = fields.reduce<Record<string, string>>((fieldAcc, field) => {
-          fieldAcc[field.name] = ""
+          const value = suggested[field.name]
+          if (value === undefined || value === null) {
+            fieldAcc[field.name] = ""
+          } else if (typeof value === "string") {
+            fieldAcc[field.name] = value
+          } else {
+            fieldAcc[field.name] = JSON.stringify(value)
+          }
           return fieldAcc
         }, {})
         return acc
@@ -508,6 +530,37 @@ export default function McpDocs() {
       )
       return acc
     }, {})
+  }
+
+  async function handleCreateDocForTool(toolName: string) {
+    if (!activeProjectId) {
+      setError("Select or create a project first")
+      return
+    }
+    setError(null)
+    setSuccess(null)
+    setCreatingDocForTool(toolName)
+    try {
+      const argsForTool = buildSampleArgsPayload()[toolName]
+      const data = await generateMcpDocsForTool(activeProjectId, toolName, {
+        sampleArgs: argsForTool && Object.keys(argsForTool).length ? argsForTool : undefined,
+      })
+      if (data.doc) {
+        setDocs((prev) => {
+          const filtered = prev.filter((item) => item.toolName !== toolName)
+          return [data.doc as McpDoc, ...filtered]
+        })
+      }
+      setSuccess(
+        data.generationError
+          ? `Doc created for ${toolName} (with warnings: ${data.generationError})`
+          : `Doc created for ${toolName}`
+      )
+    } catch (err) {
+      handleError(err, `Error creating doc for ${toolName}`)
+    } finally {
+      setCreatingDocForTool(null)
+    }
   }
 
   async function handleRunQa(toolName: string) {
@@ -885,75 +938,6 @@ export default function McpDocs() {
                   </div>
                 </details>
 
-                {hasTools && (
-                  <details className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
-                    <summary className="cursor-pointer text-xs text-white/60">
-                      Sample args
-                    </summary>
-                    <div className="mt-3 space-y-3">
-                      <p className="text-xs leading-5 text-white/40">
-                        Dynamic fields from each tool input schema. Add real
-                        values so Olivia does not guess arguments. These are
-                        sent to the backend as{" "}
-                        <span className="text-white/65">sampleArgsByTool</span>{" "}
-                        for docs, QA runs, smoke cases, and bug checks.
-                      </p>
-                      {tools.map((tool) => {
-                        const toolName = getToolName(tool)
-                        const fields = getSchemaProperties(tool.inputSchema)
-                        return (
-                          <div
-                            key={toolName}
-                            className="rounded-lg border border-white/10 bg-white/[0.02] p-3"
-                          >
-                            <p className="text-sm font-medium text-white/80">
-                              {toolName}
-                            </p>
-                            {tool.description && (
-                              <p className="text-xs text-white/45 mt-1">
-                                {tool.description}
-                              </p>
-                            )}
-                            {fields.length === 0 ? (
-                              <p className="text-xs text-white/35 mt-2">
-                                No args required.
-                              </p>
-                            ) : (
-                              <div className="mt-3 space-y-2">
-                                {fields.map((field) => (
-                                  <div key={field.name} className="space-y-1.5">
-                                    <label className="text-xs text-white/60">
-                                      {field.name}
-                                      {field.required ? " *" : ""}
-                                    </label>
-                                    <Input
-                                      value={sampleArgsByTool[toolName]?.[field.name] ?? ""}
-                                      onChange={(e) =>
-                                        updateSampleArg(
-                                          toolName,
-                                          field.name,
-                                          e.target.value
-                                        )
-                                      }
-                                      placeholder={field.type}
-                                      className={fieldClass}
-                                    />
-                                    {field.description && (
-                                      <p className="text-xs text-white/35">
-                                        {field.description}
-                                      </p>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </details>
-                )}
-
                 {error && (
                   <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-md px-3 py-2">
                     {error}
@@ -1027,7 +1011,7 @@ export default function McpDocs() {
               </div>
             )}
 
-            {!refreshing && !projectLoading && !isBugsRoute && !isSmokeRoute && docs.length === 0 && (
+            {!refreshing && !projectLoading && !isBugsRoute && !isSmokeRoute && docs.length === 0 && tools.length === 0 && (
               <EmptyState onGenerateFocus={() => window.scrollTo({ top: 0, behavior: "smooth" })} />
             )}
 
@@ -1054,21 +1038,131 @@ export default function McpDocs() {
               />
             )}
 
-            {!projectLoading && !isBugsRoute && !isSmokeRoute && docs.length > 0 && (
-              <div className="space-y-3">
-                {docs.map((doc) => (
-                  <McpDocCard
-                    key={doc._id ?? doc.toolName}
-                    doc={doc}
-                    openBugCount={getOpenBugCountForDoc(doc, tools, bugs)}
-                    deleting={deletingId === doc._id}
-                    qaRun={qaRun}
-                    qaRunning={qaRunningTool === doc.toolName}
-                    qaLimited={Boolean(trialLimits.qa_run)}
-                    onRunQa={() => handleRunQa(doc.toolName)}
-                    onDelete={() => setDeleteTarget(doc)}
-                  />
-                ))}
+            {!projectLoading && !isBugsRoute && !isSmokeRoute && tools.length > 0 && (
+              <div className="space-y-2">
+                {tools.map((tool) => {
+                  const toolName = getToolName(tool)
+                  const fields = getSchemaProperties(tool.inputSchema)
+                  const busy = creatingDocForTool === toolName
+                  const doc = docs.find((d) => d.toolName === toolName) || null
+                  const hasDoc = Boolean(doc)
+                  const argsKey = `${toolName}::args`
+                  const docKey = `${toolName}::doc`
+                  const argsOpen = expandedSections.has(argsKey)
+                  const docOpen = expandedSections.has(docKey)
+                  return (
+                    <div
+                      key={toolName}
+                      className="rounded-lg border border-white/10 bg-white/[0.03] overflow-hidden"
+                    >
+                      <div className="flex items-start justify-between gap-3 p-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-white truncate">
+                            {toolName}
+                          </p>
+                          {tool.description && (
+                            <p className="text-xs text-white/45 mt-1 line-clamp-2">
+                              {tool.description}
+                            </p>
+                          )}
+                        </div>
+                        <Button
+                          size="sm"
+                          className="bg-blue-600 hover:bg-blue-500 text-white gap-1.5 shrink-0"
+                          disabled={busy || Boolean(trialLimits.docs_generate)}
+                          onClick={() => void handleCreateDocForTool(toolName)}
+                        >
+                          {busy ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <WandSparkles className="h-3.5 w-3.5" />
+                          )}
+                          {busy
+                            ? hasDoc
+                              ? "Regenerating..."
+                              : "Creating..."
+                            : hasDoc
+                              ? "Regenerate docs"
+                              : "Create docs"}
+                        </Button>
+                      </div>
+
+                      {fields.length > 0 && (
+                        <div className="border-t border-white/5">
+                          <button
+                            type="button"
+                            onClick={() => toggleSection(argsKey)}
+                            className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-white/[0.02]"
+                          >
+                            <span className="text-xs font-semibold uppercase tracking-wider text-white/55">
+                              Arguments
+                            </span>
+                            {argsOpen ? (
+                              <ChevronUp className="h-4 w-4 text-white/40 shrink-0" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4 text-white/40 shrink-0" />
+                            )}
+                          </button>
+                          {argsOpen && (
+                            <div className="space-y-2 px-3 pb-3">
+                              {fields.map((field) => (
+                                <div key={field.name} className="space-y-1">
+                                  <label className="text-xs text-white/60">
+                                    {field.name}
+                                    {field.required ? " *" : ""}
+                                  </label>
+                                  <Input
+                                    value={sampleArgsByTool[toolName]?.[field.name] ?? ""}
+                                    onChange={(e) =>
+                                      updateSampleArg(toolName, field.name, e.target.value)
+                                    }
+                                    placeholder={field.type}
+                                    className={fieldClass}
+                                  />
+                                  {field.description && (
+                                    <p className="text-xs text-white/35">{field.description}</p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {hasDoc && doc && (
+                        <div className="border-t border-white/5">
+                          <button
+                            type="button"
+                            onClick={() => toggleSection(docKey)}
+                            className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-white/[0.02]"
+                          >
+                            <span className="text-xs font-semibold uppercase tracking-wider text-white/55">
+                              Documentation
+                            </span>
+                            {docOpen ? (
+                              <ChevronUp className="h-4 w-4 text-white/40 shrink-0" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4 text-white/40 shrink-0" />
+                            )}
+                          </button>
+                          {docOpen && (
+                            <McpDocCard
+                              doc={doc}
+                              openBugCount={getOpenBugCountForDoc(doc, tools, bugs)}
+                              deleting={deletingId === doc._id}
+                              qaRun={qaRun}
+                              qaRunning={qaRunningTool === doc.toolName}
+                              qaLimited={Boolean(trialLimits.qa_run)}
+                              onRunQa={() => handleRunQa(doc.toolName)}
+                              onDelete={() => setDeleteTarget(doc)}
+                              embedded
+                            />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </section>
@@ -1565,6 +1659,7 @@ function McpDocCard({
   qaLimited,
   onRunQa,
   onDelete,
+  embedded = false,
 }: {
   doc: McpDoc
   openBugCount: number
@@ -1574,8 +1669,10 @@ function McpDocCard({
   qaLimited: boolean
   onRunQa: () => void
   onDelete: () => void
+  embedded?: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
+  const isOpen = embedded || expanded
   const args = doc.arguments ?? []
   const examples = doc.examples ?? []
   const risks = doc.risks ?? []
@@ -1588,38 +1685,40 @@ function McpDocCard({
     doc.responseSchema !== undefined && doc.responseSchema !== null
 
   return (
-    <article className="rounded-xl border border-white/10 bg-white/[0.03]">
-      <button
-        type="button"
-        onClick={() => setExpanded((value) => !value)}
-        className="w-full flex items-center justify-between gap-3 px-5 py-4 text-left hover:bg-white/[0.03] transition-colors"
-      >
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-base font-medium text-white truncate">
-              {doc.toolName}
-            </h3>
-            <span
-              className={cn(
-                "rounded-md border px-2 py-0.5 text-xs",
-                openBugCount > 0
-                  ? "border-red-500/30 bg-red-500/10 text-red-300"
-                  : "border-white/10 bg-white/5 text-white/45"
-            )}
-            >
-              {openBugCount} open bug{openBugCount !== 1 ? "s" : ""}
-            </span>
+    <article className={embedded ? "" : "rounded-xl border border-white/10 bg-white/[0.03]"}>
+      {!embedded && (
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          className="w-full flex items-center justify-between gap-3 px-5 py-4 text-left hover:bg-white/[0.03] transition-colors"
+        >
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-base font-medium text-white truncate">
+                {doc.toolName}
+              </h3>
+              <span
+                className={cn(
+                  "rounded-md border px-2 py-0.5 text-xs",
+                  openBugCount > 0
+                    ? "border-red-500/30 bg-red-500/10 text-red-300"
+                    : "border-white/10 bg-white/5 text-white/45"
+              )}
+              >
+                {openBugCount} open bug{openBugCount !== 1 ? "s" : ""}
+              </span>
+            </div>
           </div>
-        </div>
-        {expanded ? (
-          <ChevronUp className="h-4 w-4 text-white/40 shrink-0" />
-        ) : (
-          <ChevronDown className="h-4 w-4 text-white/40 shrink-0" />
-        )}
-      </button>
+          {expanded ? (
+            <ChevronUp className="h-4 w-4 text-white/40 shrink-0" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-white/40 shrink-0" />
+          )}
+        </button>
+      )}
 
-      {expanded && (
-        <div className="px-5 pb-5 border-t border-white/10">
+      {isOpen && (
+        <div className={embedded ? "px-3 pb-3" : "px-5 pb-5 border-t border-white/10"}>
           <div className="flex items-start justify-between gap-4 pt-4">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">

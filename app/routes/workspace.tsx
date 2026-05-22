@@ -1,16 +1,26 @@
 import { useEffect, useState, type FormEvent } from "react"
 import { Link, Navigate } from "react-router"
-import { ArrowLeft, MailPlus, RefreshCw, Sparkles, Trash2, UserMinus } from "lucide-react"
+import { ArrowLeft, HeartHandshake, KeyRound, MailPlus, MessageSquare, RefreshCw, Sparkles, Trash2, UserMinus } from "lucide-react"
 import {
   cancelCompanyInvite,
+  deleteSlackConfig,
   getCompany,
   getCompanyMembers,
+  getSlackConfig,
   inviteCompanyMember,
   removeCompanyMember,
+  saveSlackConfig,
   type Company,
   type CompanyMember,
   type PendingInvite,
+  type SlackConfig,
 } from "~/api/companyApi"
+import {
+  deleteAnthropicKey,
+  getMySettings,
+  saveAnthropicKey,
+  type UserSettings,
+} from "~/api/userSettingsApi"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card"
 import {
@@ -44,6 +54,17 @@ export default function Workspace() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [settings, setSettings] = useState<UserSettings | null>(null)
+  const [anthropicKeyInput, setAnthropicKeyInput] = useState("")
+  const [keySaving, setKeySaving] = useState(false)
+  const [keyError, setKeyError] = useState<string | null>(null)
+  const [keySuccess, setKeySuccess] = useState<string | null>(null)
+  const [slack, setSlack] = useState<SlackConfig | null>(null)
+  const [slackChannelInput, setSlackChannelInput] = useState("")
+  const [slackTokenInput, setSlackTokenInput] = useState("")
+  const [slackSaving, setSlackSaving] = useState(false)
+  const [slackError, setSlackError] = useState<string | null>(null)
+  const [slackSuccess, setSlackSuccess] = useState<string | null>(null)
 
   const isOwner = user?.role === "owner"
 
@@ -51,17 +72,91 @@ export default function Workspace() {
     setLoading(true)
     setError(null)
     try {
-      const [nextCompany, nextMembers] = await Promise.all([
+      const [nextCompany, nextMembers, nextSettings, nextSlack] = await Promise.all([
         getCompany(),
         getCompanyMembers(),
+        getMySettings().catch(() => null),
+        getSlackConfig().catch(() => null),
       ])
       setCompany(nextCompany)
       setMembers(nextMembers.members ?? [])
       setPendingInvites(nextMembers.pendingInvites ?? [])
+      if (nextSettings) setSettings(nextSettings)
+      if (nextSlack) setSlack(nextSlack)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load workspace")
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleSaveKey(e: FormEvent) {
+    e.preventDefault()
+    const trimmed = anthropicKeyInput.trim()
+    if (!trimmed) return
+    setKeySaving(true)
+    setKeyError(null)
+    setKeySuccess(null)
+    try {
+      const next = await saveAnthropicKey(trimmed)
+      setSettings(next)
+      setAnthropicKeyInput("")
+      setKeySuccess("Your key was saved. Generations will now run on your friend's account.")
+    } catch (err) {
+      setKeyError(err instanceof Error ? err.message : "Failed to save key")
+    } finally {
+      setKeySaving(false)
+    }
+  }
+
+  async function handleRemoveKey() {
+    setKeySaving(true)
+    setKeyError(null)
+    setKeySuccess(null)
+    try {
+      const next = await deleteAnthropicKey()
+      setSettings(next)
+      setKeySuccess("Key removed. Falling back to the default key.")
+    } catch (err) {
+      setKeyError(err instanceof Error ? err.message : "Failed to remove key")
+    } finally {
+      setKeySaving(false)
+    }
+  }
+
+  async function handleSaveSlack(e: FormEvent) {
+    e.preventDefault()
+    const channelId = slackChannelInput.trim()
+    const botToken = slackTokenInput.trim()
+    if (!channelId || !botToken) return
+    setSlackSaving(true)
+    setSlackError(null)
+    setSlackSuccess(null)
+    try {
+      const next = await saveSlackConfig(channelId, botToken)
+      setSlack(next)
+      setSlackChannelInput("")
+      setSlackTokenInput("")
+      setSlackSuccess("Slack notifications saved. Merged PRs to main/dev will post to this channel.")
+    } catch (err) {
+      setSlackError(err instanceof Error ? err.message : "Failed to save Slack config")
+    } finally {
+      setSlackSaving(false)
+    }
+  }
+
+  async function handleRemoveSlack() {
+    setSlackSaving(true)
+    setSlackError(null)
+    setSlackSuccess(null)
+    try {
+      const next = await deleteSlackConfig()
+      setSlack(next)
+      setSlackSuccess("Slack config removed.")
+    } catch (err) {
+      setSlackError(err instanceof Error ? err.message : "Failed to remove Slack config")
+    } finally {
+      setSlackSaving(false)
     }
   }
 
@@ -264,6 +359,185 @@ export default function Workspace() {
             </CardContent>
           </Card>
         </div>
+
+        <Card className="mt-4 border-white/10 bg-white/[0.03] text-white">
+          <CardHeader>
+            <CardTitle className="text-base inline-flex items-center gap-2">
+              <HeartHandshake className="h-4 w-4 text-cyan-300" />
+              I know a friend
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-white/55 leading-relaxed">
+              Have a colleague test the product without burning my tokens? Paste
+              their Anthropic API key here and all of your doc/QA generations
+              will run on their account. If empty, we fall back to the default
+              key. The key is encrypted at rest.
+            </p>
+            {keyError && (
+              <p className="rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                {keyError}
+              </p>
+            )}
+            {keySuccess && (
+              <p className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
+                {keySuccess}
+              </p>
+            )}
+            {settings?.hasAnthropicKey && (
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.035] p-3">
+                <div className="inline-flex items-center gap-2 text-sm text-white/75">
+                  <KeyRound className="h-4 w-4 text-cyan-300" />
+                  Current key:{" "}
+                  <span className="font-mono text-white/55">
+                    {settings.anthropicKeyMask || "***"}
+                  </span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-white/60 hover:bg-white/10 hover:text-white"
+                  disabled={keySaving}
+                  onClick={() => void handleRemoveKey()}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Remove
+                </Button>
+              </div>
+            )}
+            <form onSubmit={handleSaveKey} className="space-y-2">
+              <label className="text-xs text-white/60">Anthropic API key</label>
+              <Input
+                type="password"
+                value={anthropicKeyInput}
+                onChange={(e) => setAnthropicKeyInput(e.target.value)}
+                placeholder="sk-ant-..."
+                autoComplete="off"
+                className="bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-cyan-500/50 font-mono"
+              />
+              <div className="flex justify-end">
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={keySaving || !anthropicKeyInput.trim()}
+                  className="bg-cyan-400 text-slate-950 hover:bg-cyan-300"
+                >
+                  <KeyRound className="h-3.5 w-3.5" />
+                  {keySaving ? "Saving..." : settings?.hasAnthropicKey ? "Replace key" : "Save key"}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card className="mt-4 border-white/10 bg-white/[0.03] text-white">
+          <CardHeader>
+            <CardTitle className="text-base inline-flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-emerald-300" />
+              Slack notifications
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-white/55 leading-relaxed">
+              When a PR is merged into <span className="font-mono text-white/70">main</span> or{" "}
+              <span className="font-mono text-white/70">dev</span>, Olivia will summarize what shipped
+              with Claude and post it to your Slack channel. Bot token is encrypted at rest. Only
+              the company owner can change these settings.
+            </p>
+            {!isOwner && (
+              <p className="text-xs text-white/40">
+                Only owners can configure Slack notifications.
+              </p>
+            )}
+            {slackError && (
+              <p className="rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                {slackError}
+              </p>
+            )}
+            {slackSuccess && (
+              <p className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
+                {slackSuccess}
+              </p>
+            )}
+            {slack?.hasSlackBotToken && (
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.035] p-3">
+                <div className="min-w-0 space-y-0.5 text-sm text-white/75">
+                  <div className="inline-flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4 text-emerald-300" />
+                    Channel:{" "}
+                    <span className="font-mono text-white/55">{slack.slackChannelId || "—"}</span>
+                  </div>
+                  <div className="text-xs text-white/45">
+                    Bot token: <span className="font-mono">{slack.slackBotTokenMask || "***"}</span>
+                  </div>
+                </div>
+                {isOwner && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-white/60 hover:bg-white/10 hover:text-white"
+                    disabled={slackSaving}
+                    onClick={() => void handleRemoveSlack()}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Remove
+                  </Button>
+                )}
+              </div>
+            )}
+            <form onSubmit={handleSaveSlack} className="space-y-2" autoComplete="off">
+              <div className="space-y-1.5">
+                <label className="text-xs text-white/60">Slack channel ID</label>
+                <Input
+                  name="slack-channel-id"
+                  value={slackChannelInput}
+                  onChange={(e) => setSlackChannelInput(e.target.value)}
+                  placeholder="C0123456789"
+                  autoComplete="new-password"
+                  data-1p-ignore
+                  data-lpignore="true"
+                  disabled={!isOwner}
+                  className="bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-emerald-500/50 font-mono"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs text-white/60">Slack bot token</label>
+                <Input
+                  type="password"
+                  name="slack-bot-token"
+                  value={slackTokenInput}
+                  onChange={(e) => setSlackTokenInput(e.target.value)}
+                  placeholder="xoxb-..."
+                  autoComplete="new-password"
+                  data-1p-ignore
+                  data-lpignore="true"
+                  disabled={!isOwner}
+                  className="bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-emerald-500/50 font-mono"
+                />
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={
+                    !isOwner ||
+                    slackSaving ||
+                    !slackChannelInput.trim() ||
+                    !slackTokenInput.trim()
+                  }
+                  className="bg-emerald-400 text-slate-950 hover:bg-emerald-300"
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  {slackSaving
+                    ? "Saving..."
+                    : slack?.hasSlackBotToken
+                      ? "Replace config"
+                      : "Save Slack config"}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
       </main>
 
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>

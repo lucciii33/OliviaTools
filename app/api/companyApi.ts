@@ -99,3 +99,27 @@ export async function cancelCompanyInvite(inviteId: string) {
   })
   return readJson<{ ok?: boolean; message?: string }>(res)
 }
+
+export interface SlackConfig {
+  slackChannelId: string | null
+  slackBotTokenMask: string | null
+  hasSlackBotToken: boolean
+}
+
+export async function getSlackConfig() {
+  const res = await apiFetch("/api/company/slack", { cache: "no-store" })
+  return readJson<SlackConfig>(res)
+}
+
+export async function saveSlackConfig(channelId: string, botToken: string) {
+  const res = await apiFetch("/api/company/slack", {
+    method: "PUT",
+    body: JSON.stringify({ channelId, botToken }),
+  })
+  return readJson<SlackConfig>(res)
+}
+
+export async function deleteSlackConfig() {
+  const res = await apiFetch("/api/company/slack", { method: "DELETE" })
+  return readJson<SlackConfig>(res)
+}

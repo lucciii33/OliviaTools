@@ -80,6 +80,8 @@ export interface McpTool {
   title?: string
   description?: string
   inputSchema?: Record<string, unknown>
+  suggestedArgs?: Record<string, unknown> | null
+  suggestedArgsGeneratedAt?: string | null
 }
 
 export interface McpQaRunPayload {
@@ -434,4 +436,36 @@ export async function listMcpDocs(params: {
 export async function deleteMcpDoc(id: string) {
   const res = await apiFetch(`/api/mcp-lab/docs/${id}`, { method: "DELETE" })
   return readJson<{ ok: boolean }>(res)
+}
+
+export interface GenerateMcpDocForToolResponse {
+  projectId: string
+  toolName: string
+  doc: McpDoc | null
+  savedCount?: number
+  usage?: { inputTokens?: number; outputTokens?: number; model?: string | null }
+  generationError?: string | null
+  curated?: boolean
+}
+
+export async function generateMcpDocsForTool(
+  projectId: string,
+  toolName: string,
+  payload: {
+    provider?: "anthropic" | "openai"
+    model?: string
+    sampleArgs?: Record<string, unknown>
+    save?: boolean
+  } = {}
+) {
+  const res = await apiFetch(
+    `/api/mcp-lab/projects/${encodeURIComponent(projectId)}/tools/${encodeURIComponent(
+      toolName
+    )}/docs`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  )
+  return readJson<GenerateMcpDocForToolResponse>(res)
 }
