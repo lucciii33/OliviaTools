@@ -1,56 +1,55 @@
-import { useEffect, useState, type FormEvent } from "react"
-import { Link, useNavigate } from "react-router"
-import { ArrowRight, Github, Rocket, X } from "lucide-react"
-import { Button, buttonVariants } from "~/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card"
-import { Input } from "~/components/ui/input"
-import { Sidebar } from "~/components/Sidebar"
-import { BackfillDialog } from "~/components/BackfillDialog"
-import { useAuth } from "~/context/AuthContext"
+import { useEffect, useState, type FormEvent } from "react";
+import { Link, useNavigate } from "react-router";
+import { ArrowRight, Github, Rocket, X } from "lucide-react";
+import { Button, buttonVariants } from "~/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Input } from "~/components/ui/input";
+import { Sidebar } from "~/components/Sidebar";
+import { BackfillDialog } from "~/components/BackfillDialog";
+import { useAuth } from "~/context/AuthContext";
 import {
   addKnownRepo,
   getKnownRepos,
   removeKnownRepo,
   type KnownRepo,
-} from "~/lib/knownRepos"
-import { cn } from "~/lib/utils"
+} from "~/lib/knownRepos";
+import { cn } from "~/lib/utils";
 
-const GITHUB_APP_SLUG =
-  import.meta.env.VITE_GITHUB_APP_SLUG ?? "your-app-slug"
+const GITHUB_APP_SLUG = import.meta.env.VITE_GITHUB_APP_SLUG ?? "OliviaTools";
 
 export default function DocsIndex() {
-  const { user } = useAuth()
-  const navigate = useNavigate()
-  const [repos, setRepos] = useState<KnownRepo[]>([])
-  const [backfillOpen, setBackfillOpen] = useState(false)
-  const [quickOwner, setQuickOwner] = useState("")
-  const [quickRepo, setQuickRepo] = useState("")
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [repos, setRepos] = useState<KnownRepo[]>([]);
+  const [backfillOpen, setBackfillOpen] = useState(false);
+  const [quickOwner, setQuickOwner] = useState("");
+  const [quickRepo, setQuickRepo] = useState("");
 
   useEffect(() => {
     if (!user) {
-      navigate("/login", { replace: true })
-      return
+      navigate("/login", { replace: true });
+      return;
     }
-    setRepos(getKnownRepos())
-  }, [user, navigate])
+    setRepos(getKnownRepos());
+  }, [user, navigate]);
 
-  const connectUrl = `https://github.com/apps/${GITHUB_APP_SLUG}/installations/new?state=${user?._id ?? ""}`
+  const connectUrl = `https://github.com/apps/${GITHUB_APP_SLUG}/installations/new?state=${user?._id ?? ""}`;
 
-  if (!user) return null
+  if (!user) return null;
 
   function handleQuickGo(e: FormEvent) {
-    e.preventDefault()
-    const o = quickOwner.trim()
-    const r = quickRepo.trim()
-    if (!o || !r) return
-    setRepos(addKnownRepo({ owner: o, repo: r }))
-    navigate(`/docs/${o}/${r}`)
+    e.preventDefault();
+    const o = quickOwner.trim();
+    const r = quickRepo.trim();
+    if (!o || !r) return;
+    setRepos(addKnownRepo({ owner: o, repo: r }));
+    navigate(`/docs/${o}/${r}`);
   }
 
   function handleRemove(e: React.MouseEvent, r: KnownRepo) {
-    e.preventDefault()
-    e.stopPropagation()
-    setRepos(removeKnownRepo(r))
+    e.preventDefault();
+    e.stopPropagation();
+    setRepos(removeKnownRepo(r));
   }
 
   return (
@@ -73,7 +72,7 @@ export default function DocsIndex() {
                 rel="noopener noreferrer"
                 className={cn(
                   buttonVariants({ variant: "outline", size: "sm" }),
-                  "border-white/20 text-white/80 hover:text-white hover:bg-white/10 hover:border-white/30 gap-1.5"
+                  "border-white/20 text-white/80 hover:text-white hover:bg-white/10 hover:border-white/30 gap-1.5",
                 )}
               >
                 <Github className="h-3.5 w-3.5" />
@@ -163,21 +162,21 @@ export default function DocsIndex() {
         open={backfillOpen}
         onOpenChange={setBackfillOpen}
         onCompleted={(payload) => {
-          setBackfillOpen(false)
-          setRepos(addKnownRepo(payload))
-          navigate(`/docs/${payload.owner}/${payload.repo}`)
+          setBackfillOpen(false);
+          setRepos(addKnownRepo(payload));
+          navigate(`/docs/${payload.owner}/${payload.repo}`);
         }}
       />
     </div>
-  )
+  );
 }
 
 function EmptyState({
   connectUrl,
   onBackfill,
 }: {
-  connectUrl: string
-  onBackfill: () => void
+  connectUrl: string;
+  onBackfill: () => void;
 }) {
   return (
     <div className="flex items-center justify-center py-16 px-4">
@@ -211,7 +210,7 @@ function EmptyState({
               rel="noopener noreferrer"
               className={cn(
                 buttonVariants(),
-                "w-full bg-blue-600 hover:bg-blue-500 text-white border-transparent inline-flex items-center justify-center gap-2"
+                "w-full bg-blue-600 hover:bg-blue-500 text-white border-transparent inline-flex items-center justify-center gap-2",
               )}
             >
               <Github className="h-4 w-4" />
@@ -222,7 +221,7 @@ function EmptyState({
               onClick={onBackfill}
               className={cn(
                 buttonVariants({ variant: "outline" }),
-                "w-full border-white/20 text-white/80 hover:text-white hover:bg-white/10 hover:border-white/30 inline-flex items-center justify-center gap-2"
+                "w-full border-white/20 text-white/80 hover:text-white hover:bg-white/10 hover:border-white/30 inline-flex items-center justify-center gap-2",
               )}
             >
               <Rocket className="h-4 w-4" />
@@ -232,5 +231,5 @@ function EmptyState({
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
