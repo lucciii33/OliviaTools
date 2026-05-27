@@ -200,15 +200,25 @@ export default function Login() {
           )}
 
           {!twoFactorToken && (
-            <p className="text-center text-xs text-white/40 mt-4">
-              Don&apos;t have an account?{" "}
-              <Link
-                to={inviteToken ? `/signup?token=${encodeURIComponent(inviteToken)}` : "/signup"}
-                className="text-blue-400 hover:text-blue-300 underline"
-              >
-                Register
-              </Link>
-            </p>
+            <div className="mt-4 space-y-2 text-center text-xs text-white/40">
+              <p>
+                <Link
+                  to="/forgot-password"
+                  className="text-white/60 hover:text-white underline"
+                >
+                  Forgot your password?
+                </Link>
+              </p>
+              <p>
+                Don&apos;t have an account?{" "}
+                <Link
+                  to={inviteToken ? `/signup?token=${encodeURIComponent(inviteToken)}` : "/signup"}
+                  className="text-blue-400 hover:text-blue-300 underline"
+                >
+                  Register
+                </Link>
+              </p>
+            </div>
           )}
         </CardContent>
       </Card>

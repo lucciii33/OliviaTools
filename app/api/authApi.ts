@@ -101,6 +101,36 @@ export async function loginApi(payload: LoginPayload): Promise<LoginResult> {
   return res.json()
 }
 
+export async function forgotPasswordApi(email: string): Promise<{ data: string }> {
+  const res = await fetch(`${BASE_URL}/api/user/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  })
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, `Request failed (${res.status})`))
+  }
+  return res.json()
+}
+
+export async function resetPasswordApi(
+  token: string,
+  password: string
+): Promise<{ data: string }> {
+  const res = await fetch(
+    `${BASE_URL}/api/user/reset-password/${encodeURIComponent(token)}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    }
+  )
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, `Reset failed (${res.status})`))
+  }
+  return res.json()
+}
+
 export async function loginVerifyTwoFactorApi(payload: {
   twoFactorToken: string
   code: string
