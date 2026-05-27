@@ -3,6 +3,7 @@ import { apiFetch } from "~/utils/api"
 export interface UserSettings {
   anthropicKeyMask: string | null
   hasAnthropicKey: boolean
+  twoFactorEnabled?: boolean
 }
 
 async function readJson<T>(res: Response): Promise<T> {

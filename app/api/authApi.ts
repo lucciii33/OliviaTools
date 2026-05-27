@@ -73,14 +73,45 @@ async function readErrorMessage(res: Response, fallback: string) {
   return JSON.stringify(data)
 }
 
-export async function loginApi(payload: LoginPayload): Promise<AuthResponse> {
+export interface TwoFactorChallenge {
+  requires2FA: true
+  twoFactorToken: string
+}
+
+export type LoginResult = AuthResponse | TwoFactorChallenge
+
+export function isTwoFactorChallenge(r: LoginResult): r is TwoFactorChallenge {
+  return (r as TwoFactorChallenge).requires2FA === true
+}
+
+export async function loginApi(payload: LoginPayload): Promise<LoginResult> {
   const res = await fetch(`${BASE_URL}/api/user/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   })
   if (!res.ok) {
+    if (res.status === 423) {
+      throw new Error(
+        await readErrorMessage(res, "Cuenta bloqueada temporalmente. Intenta más tarde.")
+      )
+    }
     throw new Error(await readErrorMessage(res, `Login failed (${res.status})`))
+  }
+  return res.json()
+}
+
+export async function loginVerifyTwoFactorApi(payload: {
+  twoFactorToken: string
+  code: string
+}): Promise<AuthResponse> {
+  const res = await fetch(`${BASE_URL}/api/user/login/2fa`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, `2FA verification failed (${res.status})`))
   }
   return res.json()
 }

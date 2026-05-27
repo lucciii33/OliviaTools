@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react"
 import { Link, Navigate } from "react-router"
-import { ArrowLeft, HeartHandshake, KeyRound, MailPlus, MessageSquare, RefreshCw, Sparkles, Trash2, UserMinus } from "lucide-react"
+import { ArrowLeft, Copy, HeartHandshake, KeyRound, MailPlus, MessageSquare, RefreshCw, ShieldCheck, ShieldOff, Sparkles, Trash2, UserMinus } from "lucide-react"
 import {
   cancelCompanyInvite,
   deleteSlackConfig,
@@ -21,6 +21,12 @@ import {
   saveAnthropicKey,
   type UserSettings,
 } from "~/api/userSettingsApi"
+import {
+  disableTwoFactor,
+  setupTwoFactor,
+  verifyTwoFactorSetup,
+  type TwoFactorSetupResponse,
+} from "~/api/twoFactorApi"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card"
 import {
@@ -65,6 +71,13 @@ export default function Workspace() {
   const [slackSaving, setSlackSaving] = useState(false)
   const [slackError, setSlackError] = useState<string | null>(null)
   const [slackSuccess, setSlackSuccess] = useState<string | null>(null)
+  const [twoFaSetup, setTwoFaSetup] = useState<TwoFactorSetupResponse | null>(null)
+  const [twoFaCode, setTwoFaCode] = useState("")
+  const [twoFaBackupCodes, setTwoFaBackupCodes] = useState<string[] | null>(null)
+  const [twoFaDisablePassword, setTwoFaDisablePassword] = useState("")
+  const [twoFaBusy, setTwoFaBusy] = useState(false)
+  const [twoFaError, setTwoFaError] = useState<string | null>(null)
+  const [twoFaSuccess, setTwoFaSuccess] = useState<string | null>(null)
 
   const isOwner = user?.role === "owner"
 
@@ -143,6 +156,68 @@ export default function Workspace() {
     } finally {
       setSlackSaving(false)
     }
+  }
+
+  async function handleStartTwoFa() {
+    setTwoFaError(null)
+    setTwoFaSuccess(null)
+    setTwoFaBusy(true)
+    try {
+      const res = await setupTwoFactor()
+      setTwoFaSetup(res)
+      setTwoFaBackupCodes(null)
+    } catch (err) {
+      setTwoFaError(err instanceof Error ? err.message : "Failed to start 2FA setup")
+    } finally {
+      setTwoFaBusy(false)
+    }
+  }
+
+  async function handleVerifyTwoFa(e: FormEvent) {
+    e.preventDefault()
+    setTwoFaError(null)
+    setTwoFaSuccess(null)
+    setTwoFaBusy(true)
+    try {
+      const res = await verifyTwoFactorSetup(twoFaCode.trim())
+      setTwoFaBackupCodes(res.backupCodes)
+      setTwoFaSetup(null)
+      setTwoFaCode("")
+      setSettings((prev) =>
+        prev ? { ...prev, twoFactorEnabled: true } : prev
+      )
+      setTwoFaSuccess("2FA activated. Save your backup codes — they won't be shown again.")
+    } catch (err) {
+      setTwoFaError(err instanceof Error ? err.message : "Invalid code")
+    } finally {
+      setTwoFaBusy(false)
+    }
+  }
+
+  async function handleDisableTwoFa(e: FormEvent) {
+    e.preventDefault()
+    setTwoFaError(null)
+    setTwoFaSuccess(null)
+    setTwoFaBusy(true)
+    try {
+      await disableTwoFactor(twoFaDisablePassword)
+      setSettings((prev) =>
+        prev ? { ...prev, twoFactorEnabled: false } : prev
+      )
+      setTwoFaDisablePassword("")
+      setTwoFaBackupCodes(null)
+      setTwoFaSuccess("2FA disabled.")
+    } catch (err) {
+      setTwoFaError(err instanceof Error ? err.message : "Failed to disable 2FA")
+    } finally {
+      setTwoFaBusy(false)
+    }
+  }
+
+  function cancelTwoFaSetup() {
+    setTwoFaSetup(null)
+    setTwoFaCode("")
+    setTwoFaError(null)
   }
 
   async function handleRemoveSlack() {
@@ -359,6 +434,198 @@ export default function Workspace() {
             </CardContent>
           </Card>
         </div>
+
+        <Card className="mt-4 border-white/10 bg-white/[0.03] text-white">
+          <CardHeader>
+            <CardTitle className="text-base inline-flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-emerald-300" />
+              Two-factor authentication
+              {settings?.twoFactorEnabled && (
+                <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+                  Enabled
+                </span>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div
+              className={
+                settings?.twoFactorEnabled
+                  ? "flex items-center gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5"
+                  : "flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5"
+              }
+            >
+              {settings?.twoFactorEnabled ? (
+                <>
+                  <ShieldCheck className="h-5 w-5 text-emerald-300 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-emerald-200">
+                      2FA is active on your account
+                    </p>
+                    <p className="text-xs text-emerald-300/70">
+                      You&apos;ll need a code from your authenticator app on every login.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <ShieldOff className="h-5 w-5 text-amber-300 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-amber-200">
+                      2FA is not configured
+                    </p>
+                    <p className="text-xs text-amber-300/70">
+                      Your account only uses a password. Set up 2FA to add a second factor.
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+            <p className="text-sm text-white/55 leading-relaxed">
+              Add a second step at sign-in using an authenticator app (Google
+              Authenticator, Authy, 1Password). Required for compliance and
+              recommended for everyone.
+            </p>
+            {twoFaError && (
+              <p className="rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                {twoFaError}
+              </p>
+            )}
+            {twoFaSuccess && (
+              <p className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
+                {twoFaSuccess}
+              </p>
+            )}
+
+            {twoFaBackupCodes && (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+                <p className="text-xs font-medium text-amber-200">
+                  Backup codes — save these somewhere safe. Each can be used once.
+                </p>
+                <div className="grid grid-cols-2 gap-2 font-mono text-xs text-white/85">
+                  {twoFaBackupCodes.map((code) => (
+                    <div key={code} className="rounded bg-white/[0.04] px-2 py-1">
+                      {code}
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="text-white/60 hover:bg-white/10 hover:text-white"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(twoFaBackupCodes.join("\n"))
+                    setTwoFaSuccess("Backup codes copied to clipboard.")
+                  }}
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  Copy all
+                </Button>
+              </div>
+            )}
+
+            {!settings?.twoFactorEnabled && !twoFaSetup && (
+              <Button
+                type="button"
+                size="sm"
+                disabled={twoFaBusy}
+                onClick={() => void handleStartTwoFa()}
+                className="bg-emerald-400 text-slate-950 hover:bg-emerald-300"
+              >
+                <ShieldCheck className="h-3.5 w-3.5" />
+                {twoFaBusy ? "Preparing..." : "Set up 2FA"}
+              </Button>
+            )}
+
+            {twoFaSetup && (
+              <div className="space-y-3 rounded-lg border border-white/10 bg-white/[0.035] p-3">
+                <p className="text-xs text-white/55">
+                  Scan this QR with your authenticator app, then enter the 6-digit code below.
+                </p>
+                <div className="flex items-start gap-4">
+                  <img
+                    src={twoFaSetup.qrDataUrl}
+                    alt="2FA QR code"
+                    className="h-40 w-40 rounded-md border border-white/10 bg-white"
+                  />
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <p className="text-[10px] uppercase tracking-wider text-white/40">
+                      Or enter manually
+                    </p>
+                    <code className="block break-all rounded bg-white/5 px-2 py-1.5 text-xs text-white/80">
+                      {twoFaSetup.secret}
+                    </code>
+                  </div>
+                </div>
+                <form onSubmit={handleVerifyTwoFa} className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    placeholder="123456"
+                    value={twoFaCode}
+                    onChange={(e) => setTwoFaCode(e.target.value)}
+                    maxLength={6}
+                    required
+                    className="bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-emerald-500/50 font-mono tracking-widest"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      type="submit"
+                      size="sm"
+                      disabled={twoFaBusy || twoFaCode.trim().length === 0}
+                      className="bg-emerald-400 text-slate-950 hover:bg-emerald-300"
+                    >
+                      {twoFaBusy ? "Verifying..." : "Verify & enable"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="text-white/60 hover:bg-white/10 hover:text-white"
+                      onClick={cancelTwoFaSetup}
+                      disabled={twoFaBusy}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {settings?.twoFactorEnabled && !twoFaSetup && (
+              <form
+                onSubmit={handleDisableTwoFa}
+                className="space-y-2 rounded-lg border border-white/10 bg-white/[0.035] p-3"
+                autoComplete="off"
+              >
+                <p className="text-xs text-white/55">
+                  Disable 2FA? Enter your password to confirm.
+                </p>
+                <Input
+                  type="password"
+                  value={twoFaDisablePassword}
+                  onChange={(e) => setTwoFaDisablePassword(e.target.value)}
+                  placeholder="Your password"
+                  autoComplete="current-password"
+                  className="bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-red-500/50"
+                />
+                <div className="flex justify-end">
+                  <Button
+                    type="submit"
+                    size="sm"
+                    variant="destructive"
+                    disabled={twoFaBusy || !twoFaDisablePassword.trim()}
+                  >
+                    <ShieldOff className="h-3.5 w-3.5" />
+                    {twoFaBusy ? "Disabling..." : "Disable 2FA"}
+                  </Button>
+                </div>
+              </form>
+            )}
+          </CardContent>
+        </Card>
 
         <Card className="mt-4 border-white/10 bg-white/[0.03] text-white">
           <CardHeader>

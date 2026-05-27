@@ -40,11 +40,13 @@ export default function Register() {
   }
 
   function validatePassword(password: string) {
-    if (password.length < 9) return "Password must be at least 9 characters."
+    if (password.length < 12) return "Password must be at least 12 characters."
+    if (password.length > 128) return "Password must be 128 characters or fewer."
     if (!/[A-Z]/.test(password)) return "Password must contain at least one uppercase letter."
+    if (!/[a-z]/.test(password)) return "Password must contain at least one lowercase letter."
     if (!/[0-9]/.test(password)) return "Password must contain at least one number."
-    if (!/[!@#$%^&*]/.test(password)) {
-      return "Password must contain at least one symbol: ! @ # $ % ^ & *."
+    if (!/[!@#$%^&*(),.?":{}|<>_\-+=/\\[\]~`';]/.test(password)) {
+      return "Password must contain at least one symbol."
     }
     return null
   }
@@ -57,7 +59,8 @@ export default function Register() {
       setError(passwordError)
       return
     }
-    if (typeof form.edad !== "number" || !Number.isFinite(form.edad) || form.edad < 1) {
+    const edad = form.edad
+    if (typeof edad !== "number" || !Number.isFinite(edad) || edad < 1) {
       setError("Age must be a valid number.")
       return
     }
@@ -69,6 +72,7 @@ export default function Register() {
     try {
       await registerApi({
         ...form,
+        edad,
         ...(inviteToken ? { inviteToken } : {}),
       })
       navigate(
