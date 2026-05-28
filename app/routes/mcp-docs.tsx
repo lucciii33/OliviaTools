@@ -1806,11 +1806,11 @@ function McpDocCard({
       )}
 
       {hasResponseToShow && (
-        <JsonBlock title="Tool response" value={responseToShow} />
+        <CollapsibleJsonBlock title="Tool response" value={responseToShow} />
       )}
 
       {hasResponseSchema && (
-        <JsonBlock title="Response schema" value={doc.responseSchema} />
+        <CollapsibleJsonBlock title="Response schema" value={doc.responseSchema} />
       )}
 
       {hasRawResponse && (
@@ -1878,27 +1878,32 @@ function McpDocCard({
           </h4>
           <div className="space-y-2">
             {examples.map((example, index) => (
-              <div
+              <details
                 key={`${example.title ?? "example"}-${index}`}
-                className="rounded-lg border border-white/10 bg-white/[0.02] p-3"
+                className="group rounded-lg border border-white/10 bg-white/[0.02]"
               >
-                <p className="text-sm font-medium text-white/80">
-                  {example.title || `Example ${index + 1}`}
-                </p>
-                {example.prompt && (
-                  <p className="text-sm text-white/60 mt-1">{example.prompt}</p>
-                )}
-                {example.args && Object.keys(example.args).length > 0 && (
-                  <pre className="mt-2 overflow-x-auto rounded-md bg-black/20 px-3 py-2 text-xs text-white/60">
-                    {JSON.stringify(example.args, null, 2)}
-                  </pre>
-                )}
-                {example.expectedResult && (
-                  <p className="text-xs text-white/40 mt-2">
-                    Expected: {example.expectedResult}
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-3">
+                  <p className="text-sm font-medium text-white/80">
+                    {example.title || `Example ${index + 1}`}
                   </p>
-                )}
-              </div>
+                  <ChevronDown className="h-4 w-4 shrink-0 text-white/35 transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="border-t border-white/10 p-3">
+                  {example.prompt && (
+                    <p className="text-sm text-white/60">{example.prompt}</p>
+                  )}
+                  {example.args && Object.keys(example.args).length > 0 && (
+                    <pre className="mt-2 overflow-x-auto rounded-md bg-black/20 px-3 py-2 text-xs text-white/60">
+                      {JSON.stringify(example.args, null, 2)}
+                    </pre>
+                  )}
+                  {example.expectedResult && (
+                    <p className="text-xs text-white/40 mt-2">
+                      Expected: {example.expectedResult}
+                    </p>
+                  )}
+                </div>
+              </details>
             ))}
           </div>
         </div>

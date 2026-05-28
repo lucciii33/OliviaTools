@@ -380,7 +380,10 @@ export default function Home() {
       </main>
 
       <footer className="border-t border-white/10 px-5 py-6 text-center text-xs text-white/[0.35] md:px-8">
-        Olivia Tool - API docs and QA for repositories. MCP docs and QA for live tool servers.
+        <p>Olivia Tool - API docs and QA for repositories. MCP docs and QA for live tool servers.</p>
+        <Link to="/privacy" className="mt-2 inline-block text-white/45 hover:text-white/70">
+          Privacy Policy
+        </Link>
       </footer>
     </div>
   )

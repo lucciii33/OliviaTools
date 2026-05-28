@@ -15,6 +15,7 @@ export default [
   route("mcp-docs/:projectId", "routes/mcp-docs.$projectId.tsx"),
   route("mcp-docs/:projectId/bugs", "routes/mcp-docs.$projectId.bugs.tsx"),
   route("mcp-docs/:projectId/smoke", "routes/mcp-docs.$projectId.smoke.tsx"),
+  route("privacy", "routes/privacy.tsx"),
   route("docs", "routes/docs.tsx"),
   route("docs/:owner/:repo", "routes/docs.$owner.$repo.tsx"),
   route("*", "routes/catch-all.tsx"),
