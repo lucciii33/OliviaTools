@@ -18,5 +18,6 @@ export default [
   route("privacy", "routes/privacy.tsx"),
   route("docs", "routes/docs.tsx"),
   route("docs/:owner/:repo", "routes/docs.$owner.$repo.tsx"),
+  route("swagger-qa", "routes/swagger-qa.tsx"),
   route("*", "routes/catch-all.tsx"),
 ] satisfies RouteConfig

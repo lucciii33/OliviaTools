@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { apiFetch } from "~/utils/api"
+import type { Doc } from "./docsApi"
 
 export type QaAuthType = "none" | "bearer" | "apiKey" | "basic" | "custom"
 
@@ -60,6 +61,39 @@ export interface QaRunSummary {
   totalTests: number
   bugCount: number
   createdAt: string
+}
+
+export type DetectedAuth = { type: QaAuthType; headerName: string }
+
+export interface ImportResult {
+  projectId: string
+  title: string
+  version: string
+  detectedAuth: DetectedAuth
+  totalEndpoints: number
+  created: number
+  updated: number
+  baseUrl: string | null
+  endpoints: { method: string; path: string; section: string }[]
+}
+
+export interface ProjectAuth {
+  type: QaAuthType
+  headerName: string
+  username: string
+  valueMasked: string
+  passwordMasked: string
+}
+
+export interface ApiProject {
+  _id: string
+  name: string
+  title: string
+  version: string
+  source: "manual" | "github"
+  baseUrl: string
+  auth: ProjectAuth
+  updatedAt?: string
 }
 
 export function useQaApi() {
@@ -143,6 +177,88 @@ export function useQaApi() {
     return (await res.json()) as QaRun
   }
 
+  // Paste a spec → creates/updates an API project + its endpoints.
+  const importProjectSpec = async (
+    specText: string,
+    projectId?: string
+  ): Promise<ImportResult | null> => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await apiFetch(`/api/qa/projects/import`, {
+        method: "POST",
+        body: JSON.stringify({ specText, projectId }),
+      })
+      if (!res.ok) {
+        const body = await res.text()
+        setError(body || `Import failed (${res.status})`)
+        return null
+      }
+      return (await res.json()) as ImportResult
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Import failed")
+      return null
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const listProjects = async (): Promise<ApiProject[]> => {
+    setError(null)
+    const res = await apiFetch(`/api/qa/projects`)
+    if (!res.ok) {
+      setError(`Failed to load projects (${res.status})`)
+      return []
+    }
+    return (await res.json()) as ApiProject[]
+  }
+
+  const getProjectDocs = async (
+    projectId: string
+  ): Promise<{ project: ApiProject; docs: Doc[] } | null> => {
+    setError(null)
+    const res = await apiFetch(`/api/qa/projects/${projectId}/docs`)
+    if (!res.ok) {
+      setError(`Failed to load endpoints (${res.status})`)
+      return null
+    }
+    return (await res.json()) as { project: ApiProject; docs: Doc[] }
+  }
+
+  const saveProjectAuth = async (
+    projectId: string,
+    payload: { baseUrl: string; auth: QaAuthConfig }
+  ): Promise<ApiProject | null> => {
+    setError(null)
+    const res = await apiFetch(`/api/qa/projects/${projectId}/auth`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      setError(`Failed to save (${res.status})`)
+      return null
+    }
+    return (await res.json()) as ApiProject
+  }
+
+  // Fetch the Postman collection for one whole section of a project.
+  const getSectionCollection = async (
+    projectId: string,
+    section: string
+  ): Promise<unknown | null> => {
+    setError(null)
+    const res = await apiFetch(
+      `/api/qa/projects/${projectId}/section-collection?section=${encodeURIComponent(
+        section
+      )}`
+    )
+    if (!res.ok) {
+      setError(`Failed to build collection (${res.status})`)
+      return null
+    }
+    return await res.json()
+  }
+
   return {
     loading,
     error,
@@ -151,5 +267,10 @@ export function useQaApi() {
     runQa,
     getRuns,
     getRun,
+    importProjectSpec,
+    listProjects,
+    getProjectDocs,
+    saveProjectAuth,
+    getSectionCollection,
   }
 }

@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { BookOpen, Menu, Settings } from "lucide-react"
+import { BookOpen, FileCode, Menu, Settings } from "lucide-react"
 import { Link, useLocation } from "react-router"
 import { Button } from "~/components/ui/button"
 import {
@@ -24,6 +24,7 @@ function SidebarContent() {
   const { installations, getInstallations } = useInstallationsApi()
   const isAllActive = location.pathname === "/docs"
   const isWorkspaceActive = location.pathname === "/workspace"
+  const isSwaggerActive = location.pathname === "/swagger-qa"
 
   useEffect(() => {
     getInstallations()
@@ -38,6 +39,20 @@ function SidebarContent() {
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        <Link
+          to="/swagger-qa"
+          className={cn(
+            itemBase,
+            "mb-3",
+            isSwaggerActive ? itemActive : itemIdle
+          )}
+        >
+          <span className="inline-flex items-center gap-2">
+            <FileCode className="h-3.5 w-3.5" />
+            Olivia + Swagger
+          </span>
+        </Link>
+
         <p className="text-xs text-white/30 uppercase tracking-wider px-2 mb-2">
           Repositories
         </p>

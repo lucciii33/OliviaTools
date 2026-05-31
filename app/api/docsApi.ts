@@ -18,6 +18,7 @@ export interface Doc {
   _id: string
   method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH"
   path: string
+  section?: string
   description: string
   requestBody: DocParam[]
   queryParams: DocParam[]

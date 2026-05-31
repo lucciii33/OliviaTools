@@ -5,7 +5,8 @@ import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "~/components/ui/card"
 import { useAuth } from "~/context/AuthContext"
-import { loginApi, loginVerifyTwoFactorApi, isTwoFactorChallenge } from "~/api/authApi"
+import { loginApi, loginVerifyTwoFactorApi, isTwoFactorChallenge, googleLoginApi } from "~/api/authApi"
+import { GoogleSignInButton } from "~/components/GoogleSignInButton"
 
 export default function Login() {
   const { login, user } = useAuth()
@@ -57,6 +58,20 @@ export default function Login() {
       redirectAfterLogin()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleGoogle(credential: string) {
+    setError(null)
+    setLoading(true)
+    try {
+      const data = await googleLoginApi(credential)
+      login(data)
+      redirectAfterLogin()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Google sign-in failed")
     } finally {
       setLoading(false)
     }
@@ -115,6 +130,16 @@ export default function Login() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {!twoFactorToken && import.meta.env.VITE_GOOGLE_CLIENT_ID && (
+            <div className="mb-4 space-y-3">
+              <GoogleSignInButton onCredential={handleGoogle} />
+              <div className="flex items-center gap-3 text-[11px] text-white/30">
+                <div className="h-px flex-1 bg-white/10" />
+                or
+                <div className="h-px flex-1 bg-white/10" />
+              </div>
+            </div>
+          )}
           {!twoFactorToken ? (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
