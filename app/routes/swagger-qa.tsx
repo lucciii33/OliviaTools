@@ -2,12 +2,15 @@ import { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router"
 import {
   ArrowLeft,
+  Check,
   ChevronDown,
   Download,
   FileCode,
   Loader2,
   Play,
+  RotateCcw,
   Settings2,
+  Trash2,
 } from "lucide-react"
 import { Button } from "~/components/ui/button"
 import { Sidebar } from "~/components/Sidebar"
@@ -19,7 +22,7 @@ import { type Doc } from "~/api/docsApi"
 import {
   useQaApi,
   type ApiProject,
-  type QaExecution,
+  type BugRecord,
   type QaRun,
 } from "~/api/qaApi"
 import { cn } from "~/lib/utils"
@@ -274,27 +277,7 @@ function SectionCard({
   canRun: boolean
   onDownload: () => void
 }) {
-  const { runQa } = useQaApi()
   const [open, setOpen] = useState(true)
-  const [running, setRunning] = useState(false)
-  const [run, setRun] = useState<QaRun | null>(null)
-
-  // Run the agent against every endpoint in the section, then merge results.
-  async function runSection() {
-    setRunning(true)
-    setRun(null)
-    const allExec: QaExecution[] = []
-    let bugCount = 0
-    for (const doc of docs) {
-      const r = await runQa(doc._id)
-      if (r) {
-        allExec.push(...r.executions)
-        bugCount += r.bugCount
-      }
-    }
-    setRun({ totalTests: allExec.length, bugCount, executions: allExec })
-    setRunning(false)
-  }
 
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.015] mb-3 overflow-hidden">
@@ -314,59 +297,321 @@ function SectionCard({
         <span className="text-[11px] bg-white/8 text-white/60 px-2 py-0.5 rounded-full">
           {docs.length}
         </span>
-        <div className="ml-auto flex gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            className="border-white/15 text-white/80 hover:bg-white/10 gap-1.5"
-            onClick={onDownload}
-          >
-            <Download className="h-3.5 w-3.5" />
-            Postman
-          </Button>
-          <Button
-            size="sm"
-            className="bg-red-600/90 hover:bg-red-500 text-white gap-1.5"
-            onClick={runSection}
-            disabled={running || !canRun}
-            title={canRun ? "" : "Set base URL first"}
-          >
-            {running ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Play className="h-3.5 w-3.5" />
-            )}
-            Run QA
-          </Button>
-        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="ml-auto border-white/15 text-white/80 hover:bg-white/10 gap-1.5"
+          onClick={onDownload}
+        >
+          <Download className="h-3.5 w-3.5" />
+          Postman
+        </Button>
       </div>
 
       {open && (
         <div className="border-t border-white/8 divide-y divide-white/5">
           {docs.map((doc) => (
-            <div
-              key={doc._id}
-              className="flex items-center gap-3 px-4 py-2.5 pl-10"
-            >
-              <MethodBadge method={doc.method} />
-              <div className="min-w-0">
-                <div className="font-mono text-sm text-white/85 truncate">
-                  {doc.path}
-                </div>
-                {doc.description && (
-                  <div className="text-xs text-white/40 truncate">
-                    {doc.description}
+            <EndpointRow key={doc._id} doc={doc} canRun={canRun} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// One endpoint: expand to read its docs (request + response), see saved bugs
+// (mark done / delete), or Run QA on it.
+function EndpointRow({ doc, canRun }: { doc: Doc; canRun: boolean }) {
+  const { runQa, getBugs, setBugStatus, deleteBug } = useQaApi()
+  const [open, setOpen] = useState(false)
+  const [running, setRunning] = useState(false)
+  const [run, setRun] = useState<QaRun | null>(null)
+  const [bugs, setBugs] = useState<BugRecord[]>([])
+  const [bugsLoaded, setBugsLoaded] = useState(false)
+
+  async function loadBugs() {
+    const b = await getBugs(doc._id)
+    setBugs(b)
+    setBugsLoaded(true)
+  }
+
+  useEffect(() => {
+    if (open && !bugsLoaded) loadBugs()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  async function runOne() {
+    setRunning(true)
+    const r = await runQa(doc._id)
+    setRunning(false)
+    if (r) {
+      setRun(r)
+      loadBugs() // refresh saved bugs after a run
+    }
+  }
+
+  async function toggleDone(b: BugRecord) {
+    const next: BugRecord["status"] = b.status === "fixed" ? "open" : "fixed"
+    if (await setBugStatus(b._id, next)) {
+      setBugs((rows) =>
+        rows.map((x) => (x._id === b._id ? { ...x, status: next } : x))
+      )
+    }
+  }
+  async function removeBug(id: string) {
+    if (await deleteBug(id)) {
+      setBugs((rows) => rows.filter((x) => x._id !== id))
+    }
+  }
+
+  const openBugs = bugs.filter((b) => b.status !== "fixed").length
+
+  return (
+    <div>
+      <div className="flex items-center gap-3 px-4 py-2.5 pl-8">
+        <button
+          onClick={() => setOpen(!open)}
+          className="flex items-center gap-2 min-w-0 flex-1 text-left"
+        >
+          <ChevronDown
+            className={cn(
+              "h-3.5 w-3.5 text-white/30 transition-transform shrink-0",
+              !open && "-rotate-90"
+            )}
+          />
+          <MethodBadge method={doc.method} />
+          <span className="font-mono text-sm text-white/85 truncate">
+            {doc.path}
+          </span>
+        </button>
+        {openBugs > 0 && (
+          <span className="text-[10px] bg-red-500/15 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full shrink-0">
+            {openBugs} bug{openBugs === 1 ? "" : "s"}
+          </span>
+        )}
+        <Button
+          size="sm"
+          className="bg-red-600/90 hover:bg-red-500 text-white gap-1.5 shrink-0"
+          onClick={runOne}
+          disabled={running || !canRun}
+          title={canRun ? "" : "Set base URL & auth first"}
+        >
+          {running ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Play className="h-3.5 w-3.5" />
+          )}
+          Run QA
+        </Button>
+      </div>
+
+      {open && (
+        <div className="px-4 pb-3 pl-12 space-y-3 text-xs">
+          {doc.description && <p className="text-white/50">{doc.description}</p>}
+          {doc.requestBody?.length > 0 && (
+            <DocFields title="Request body" fields={doc.requestBody} />
+          )}
+          {doc.queryParams?.length > 0 && (
+            <DocFields title="Query params" fields={doc.queryParams} />
+          )}
+          {doc.responses?.length > 0 && (
+            <div>
+              <div className="text-white/40 uppercase tracking-wider text-[10px] mb-1">
+                Responses
+              </div>
+              <div className="space-y-1">
+                {doc.responses.map((r, i) => (
+                  <div
+                    key={i}
+                    className="rounded bg-black/30 border border-white/10 p-2"
+                  >
+                    <div className="font-mono text-white/70">
+                      {r.status} · {r.description}
+                    </div>
+                    {r.example != null &&
+                      !(
+                        typeof r.example === "object" &&
+                        Object.keys(r.example).length === 0
+                      ) && (
+                        <pre className="mt-1 text-[11px] text-white/55 whitespace-pre-wrap break-all">
+                          {typeof r.example === "string"
+                            ? r.example
+                            : JSON.stringify(r.example, null, 2)}
+                        </pre>
+                      )}
                   </div>
-                )}
+                ))}
               </div>
             </div>
-          ))}
+          )}
+
+          {/* Saved bugs for this endpoint — persist across reloads */}
+          <div>
+            <div className="text-white/40 uppercase tracking-wider text-[10px] mb-1">
+              Saved bugs {bugsLoaded ? `(${bugs.length})` : "…"}
+            </div>
+            {bugsLoaded && bugs.length === 0 && (
+              <p className="text-white/30">
+                No saved bugs yet. Run QA to find some.
+              </p>
+            )}
+            <div className="space-y-1.5">
+              {bugs.map((b) => (
+                <BugItem
+                  key={b._id}
+                  bug={b}
+                  onToggleDone={() => toggleDone(b)}
+                  onDelete={() => removeBug(b._id)}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
       {run && (
-        <div className="border-t border-white/8 p-4 bg-black/20">
-          <QaRunView run={run} repoLabel={section} />
+        <div className="border-t border-white/8 p-4 pl-8 bg-black/20">
+          <QaRunView run={run} repoLabel={doc.path} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DocFields({
+  title,
+  fields,
+}: {
+  title: string
+  fields: { name: string; type: string; required: boolean; description?: string }[]
+}) {
+  return (
+    <div>
+      <div className="text-white/40 uppercase tracking-wider text-[10px] mb-1">
+        {title}
+      </div>
+      <div className="space-y-0.5">
+        {fields.map((f, i) => (
+          <div key={i} className="flex items-center gap-2 font-mono">
+            <span className="text-white/80">{f.name}</span>
+            <span className="text-white/40">{f.type}</span>
+            {f.required && (
+              <span className="text-amber-400/70 text-[10px]">required</span>
+            )}
+            {f.description && (
+              <span className="font-sans text-white/30 truncate">
+                — {f.description}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+const SEV_STYLE: Record<string, string> = {
+  critical: "bg-red-500/20 text-red-300 border-red-500/40",
+  high: "bg-red-500/15 text-red-400 border-red-500/30",
+  medium: "bg-amber-500/15 text-amber-400 border-amber-500/30",
+  low: "bg-blue-500/15 text-blue-400 border-blue-500/30",
+}
+
+// A single saved bug: title + severity, expand for repro (request/response),
+// mark done (open ↔ fixed), or delete.
+function BugItem({
+  bug,
+  onToggleDone,
+  onDelete,
+}: {
+  bug: BugRecord
+  onToggleDone: () => void
+  onDelete: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const done = bug.status === "fixed"
+  return (
+    <div
+      className={cn(
+        "rounded-md border p-2",
+        done
+          ? "border-green-500/20 bg-green-500/[0.04]"
+          : "border-red-500/20 bg-red-500/[0.04]"
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setOpen(!open)}
+          className="flex items-center gap-2 min-w-0 flex-1 text-left"
+        >
+          <span
+            className={cn(
+              "text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded border shrink-0",
+              SEV_STYLE[bug.severity] ?? "bg-white/5 text-white/60 border-white/15"
+            )}
+          >
+            {bug.severity}
+          </span>
+          <span
+            className={cn(
+              "text-xs truncate",
+              done ? "text-white/40 line-through" : "text-white/85"
+            )}
+          >
+            {bug.title}
+          </span>
+        </button>
+        <button
+          onClick={onToggleDone}
+          title={done ? "Reopen" : "Mark as done"}
+          className={cn(
+            "p-1 rounded shrink-0",
+            done
+              ? "text-white/40 hover:text-white/70"
+              : "text-green-400 hover:bg-green-500/10"
+          )}
+        >
+          {done ? (
+            <RotateCcw className="h-3.5 w-3.5" />
+          ) : (
+            <Check className="h-3.5 w-3.5" />
+          )}
+        </button>
+        <button
+          onClick={onDelete}
+          title="Delete bug"
+          className="p-1 rounded text-white/30 hover:text-red-400 hover:bg-red-500/10 shrink-0"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {open && (
+        <div className="mt-2 space-y-2 text-[11px]">
+          {bug.description && (
+            <p className="text-white/60">{bug.description}</p>
+          )}
+          <div className="font-mono text-white/70 break-all">
+            {bug.request?.method} {bug.request?.url}
+          </div>
+          <div className="text-white/40">
+            expected {JSON.stringify(bug.expectedStatus)} · got{" "}
+            <span className="text-red-400">{bug.response?.status}</span>
+          </div>
+          {bug.request?.body != null && (
+            <pre className="rounded bg-black/40 p-2 text-white/60 whitespace-pre-wrap break-all">
+              req: {typeof bug.request.body === "string"
+                ? bug.request.body
+                : JSON.stringify(bug.request.body, null, 2)}
+            </pre>
+          )}
+          {bug.response?.body != null && (
+            <pre className="rounded bg-black/40 p-2 text-white/60 whitespace-pre-wrap break-all">
+              res: {typeof bug.response.body === "string"
+                ? bug.response.body
+                : JSON.stringify(bug.response.body, null, 2)}
+            </pre>
+          )}
         </div>
       )}
     </div>

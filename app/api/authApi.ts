@@ -102,8 +102,9 @@ export async function loginApi(payload: LoginPayload): Promise<LoginResult> {
 }
 
 // Exchange a Google ID token (credential from "Sign in with Google") for our
-// own session. The backend verifies it and enforces the company domain.
-export async function googleLoginApi(credential: string): Promise<AuthResponse> {
+// own session. The backend verifies it, enforces the company domain, and may
+// return a 2FA challenge if the account has 2FA enabled.
+export async function googleLoginApi(credential: string): Promise<LoginResult> {
   const res = await fetch(`${BASE_URL}/api/user/auth/google`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

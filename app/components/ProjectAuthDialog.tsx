@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Loader2, ShieldCheck } from "lucide-react"
+import { Loader2, Plus, ShieldCheck, X } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -9,7 +9,12 @@ import {
 } from "~/components/ui/dialog"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
-import { useQaApi, type ApiProject, type QaAuthType } from "~/api/qaApi"
+import {
+  useQaApi,
+  type ApiProject,
+  type ProjectVariable,
+  type QaAuthType,
+} from "~/api/qaApi"
 
 interface Props {
   open: boolean
@@ -35,6 +40,7 @@ export function ProjectAuthDialog({ open, onOpenChange, project, onSaved }: Prop
   const [username, setUsername] = useState("")
   const [value, setValue] = useState("")
   const [password, setPassword] = useState("")
+  const [vars, setVars] = useState<ProjectVariable[]>([])
 
   useEffect(() => {
     if (!open) return
@@ -44,12 +50,24 @@ export function ProjectAuthDialog({ open, onOpenChange, project, onSaved }: Prop
     setUsername(project.auth?.username ?? "")
     setValue("")
     setPassword("")
+    setVars(project.variables?.length ? project.variables : [])
   }, [open, project])
+
+  function updateVar(i: number, patch: Partial<ProjectVariable>) {
+    setVars((rows) => rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
+  }
+  function addVar() {
+    setVars((rows) => [...rows, { key: "", value: "", secret: false }])
+  }
+  function removeVar(i: number) {
+    setVars((rows) => rows.filter((_, idx) => idx !== i))
+  }
 
   async function handleSave() {
     const saved = await saveProjectAuth(project._id, {
       baseUrl,
       auth: { type: authType, headerName, username, value, password },
+      variables: vars.filter((v) => v.key.trim()),
     })
     if (saved) {
       onSaved?.(saved)
@@ -149,6 +167,68 @@ export function ProjectAuthDialog({ open, onOpenChange, project, onSaved }: Prop
               />
             </div>
           )}
+
+          {/* Environment variables */}
+          <div className="pt-1 border-t border-white/10">
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs text-white/50">
+                Environment variables{" "}
+                <span className="text-white/30">
+                  (fill {"{{key}}"} & path params like {"{userId}"})
+                </span>
+              </label>
+              <button
+                type="button"
+                onClick={addVar}
+                className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"
+              >
+                <Plus className="h-3 w-3" /> Add
+              </button>
+            </div>
+            <div className="space-y-1.5">
+              {vars.length === 0 && (
+                <p className="text-[11px] text-white/30">
+                  e.g. userId = 7654321 · providerId = krypton
+                </p>
+              )}
+              {vars.map((v, i) => (
+                <div key={i} className="flex items-center gap-1.5">
+                  <Input
+                    value={v.key}
+                    onChange={(e) => updateVar(i, { key: e.target.value })}
+                    placeholder="key"
+                    className="bg-black/30 border-white/10 font-mono text-xs h-8 flex-1"
+                  />
+                  <Input
+                    value={v.value}
+                    onChange={(e) => updateVar(i, { value: e.target.value })}
+                    placeholder={v.secret ? "secret value" : "value"}
+                    type={v.secret ? "password" : "text"}
+                    className="bg-black/30 border-white/10 font-mono text-xs h-8 flex-1"
+                  />
+                  <button
+                    type="button"
+                    title="secret"
+                    onClick={() => updateVar(i, { secret: !v.secret })}
+                    className={`text-[10px] px-1.5 h-8 rounded border ${
+                      v.secret
+                        ? "border-amber-500/40 text-amber-400"
+                        : "border-white/15 text-white/40"
+                    }`}
+                  >
+                    🔒
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeVar(i)}
+                    className="text-white/30 hover:text-red-400"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
 
           {error && <p className="text-sm text-red-400">{error}</p>}
         </div>

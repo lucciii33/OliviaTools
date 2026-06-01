@@ -68,6 +68,10 @@ export default function Login() {
     setLoading(true)
     try {
       const data = await googleLoginApi(credential)
+      if (isTwoFactorChallenge(data)) {
+        setTwoFactorToken(data.twoFactorToken)
+        return
+      }
       login(data)
       redirectAfterLogin()
     } catch (err) {

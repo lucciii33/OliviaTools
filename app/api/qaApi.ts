@@ -56,6 +56,22 @@ export interface QaRun {
   createdAt?: string
 }
 
+export type BugStatus = "open" | "fixed" | "ignored"
+
+export interface BugRecord {
+  _id: string
+  severity: string
+  category: string
+  title: string
+  description: string
+  testCaseName: string
+  expectedStatus: number[]
+  request: { method: string; url: string; body: unknown }
+  response: { status: number; body: unknown }
+  status: BugStatus
+  createdAt: string
+}
+
 export interface QaRunSummary {
   _id: string
   totalTests: number
@@ -85,6 +101,12 @@ export interface ProjectAuth {
   passwordMasked: string
 }
 
+export interface ProjectVariable {
+  key: string
+  value: string
+  secret: boolean
+}
+
 export interface ApiProject {
   _id: string
   name: string
@@ -93,6 +115,7 @@ export interface ApiProject {
   source: "manual" | "github"
   baseUrl: string
   auth: ProjectAuth
+  variables: ProjectVariable[]
   updatedAt?: string
 }
 
@@ -227,7 +250,11 @@ export function useQaApi() {
 
   const saveProjectAuth = async (
     projectId: string,
-    payload: { baseUrl: string; auth: QaAuthConfig }
+    payload: {
+      baseUrl: string
+      auth: QaAuthConfig
+      variables?: ProjectVariable[]
+    }
   ): Promise<ApiProject | null> => {
     setError(null)
     const res = await apiFetch(`/api/qa/projects/${projectId}/auth`, {
@@ -259,6 +286,33 @@ export function useQaApi() {
     return await res.json()
   }
 
+  // Saved bugs for one endpoint (doc).
+  const getBugs = async (docId: string): Promise<BugRecord[]> => {
+    setError(null)
+    const res = await apiFetch(`/api/qa/bugs/${docId}`)
+    if (!res.ok) {
+      setError(`Failed to load bugs (${res.status})`)
+      return []
+    }
+    return (await res.json()) as BugRecord[]
+  }
+
+  const setBugStatus = async (
+    bugId: string,
+    status: BugStatus
+  ): Promise<boolean> => {
+    const res = await apiFetch(`/api/qa/bugs/${bugId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    })
+    return res.ok
+  }
+
+  const deleteBug = async (bugId: string): Promise<boolean> => {
+    const res = await apiFetch(`/api/qa/bugs/${bugId}`, { method: "DELETE" })
+    return res.ok
+  }
+
   return {
     loading,
     error,
@@ -272,5 +326,8 @@ export function useQaApi() {
     getProjectDocs,
     saveProjectAuth,
     getSectionCollection,
+    getBugs,
+    setBugStatus,
+    deleteBug,
   }
 }
