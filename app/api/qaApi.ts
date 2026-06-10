@@ -2,7 +2,7 @@ import { useState } from "react"
 import { apiFetch } from "~/utils/api"
 import type { Doc } from "./docsApi"
 
-export type QaAuthType = "none" | "bearer" | "apiKey" | "basic" | "custom"
+export type QaAuthType = "none" | "bearer" | "apiKey" | "basic" | "custom" | "oauth2_client_credentials"
 
 export interface QaAuthConfig {
   type: QaAuthType
@@ -18,7 +18,7 @@ export interface QaConfig {
   defaultHeaders?: Record<string, string>
 }
 
-export type QaTestGroup = "happy" | "sad" | "boundary" | "security"
+export type QaTestGroup = "happy" | "sad" | "boundary" | "security" | "chain"
 
 export interface QaExecution {
   name: string
@@ -26,6 +26,10 @@ export interface QaExecution {
   category: string
   rationale: string
   expectedStatus: number[]
+  // Present on suite executions — undefined on single-endpoint runs
+  stepIndex?: number
+  targetMethod?: string
+  targetPath?: string
   request: {
     method: string
     url: string
@@ -79,6 +83,17 @@ export interface QaRunSummary {
   createdAt: string
 }
 
+export interface SuiteRun {
+  runId: string
+  suiteRunId: string
+  _id?: string
+  section: string
+  totalTests: number
+  bugCount: number
+  executions: QaExecution[]
+  createdAt?: string
+}
+
 export type DetectedAuth = { type: QaAuthType; headerName: string }
 
 export interface ImportResult {
@@ -90,6 +105,8 @@ export interface ImportResult {
   created: number
   updated: number
   baseUrl: string | null
+  autoFilledVariables: string[]
+  requiredVariables: string[]
   endpoints: { method: string; path: string; section: string }[]
 }
 
@@ -313,6 +330,46 @@ export function useQaApi() {
     return res.ok
   }
 
+  const deleteProject = async (projectId: string): Promise<boolean> => {
+    const res = await apiFetch(`/api/qa/projects/${projectId}`, { method: "DELETE" })
+    return res.ok
+  }
+
+  const runSuiteQa = async (projectId: string, section: string): Promise<SuiteRun | null> => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await apiFetch(
+        `/api/qa/projects/${projectId}/suite/${encodeURIComponent(section)}`,
+        { method: "POST" }
+      )
+      if (!res.ok) {
+        const body = await res.text()
+        setError(body || `Suite run failed (${res.status})`)
+        return null
+      }
+      return (await res.json()) as SuiteRun
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Suite run failed")
+      return null
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const getSuiteRuns = async (projectId: string, section?: string): Promise<QaRunSummary[]> => {
+    const qs = section ? `?section=${encodeURIComponent(section)}` : ""
+    const res = await apiFetch(`/api/qa/projects/${projectId}/suite-runs${qs}`)
+    if (!res.ok) return []
+    return (await res.json()) as QaRunSummary[]
+  }
+
+  const getSuiteRun = async (id: string): Promise<SuiteRun | null> => {
+    const res = await apiFetch(`/api/qa/suite-run/${id}`)
+    if (!res.ok) return null
+    return (await res.json()) as SuiteRun
+  }
+
   return {
     loading,
     error,
@@ -329,5 +386,9 @@ export function useQaApi() {
     getBugs,
     setBugStatus,
     deleteBug,
+    deleteProject,
+    runSuiteQa,
+    getSuiteRuns,
+    getSuiteRun,
   }
 }
