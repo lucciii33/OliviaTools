@@ -21,6 +21,7 @@ interface Props {
   onOpenChange: (open: boolean) => void
   project: ApiProject
   onSaved?: (p: ApiProject) => void
+  suggestedVariables?: { key: string; value: string; secret: boolean }[]
 }
 
 const AUTH_LABEL: Record<QaAuthType, string> = {
@@ -29,10 +30,11 @@ const AUTH_LABEL: Record<QaAuthType, string> = {
   apiKey: "API key (header)",
   basic: "Basic auth",
   custom: "Custom header",
+  oauth2_client_credentials: "OAuth2 client credentials (auto-token)",
 }
 
 // baseUrl + auth TYPE come from the spec; the user only supplies the secret.
-export function ProjectAuthDialog({ open, onOpenChange, project, onSaved }: Props) {
+export function ProjectAuthDialog({ open, onOpenChange, project, onSaved, suggestedVariables }: Props) {
   const { saveProjectAuth, loading, error } = useQaApi()
   const [baseUrl, setBaseUrl] = useState("")
   const [authType, setAuthType] = useState<QaAuthType>("none")
@@ -50,8 +52,21 @@ export function ProjectAuthDialog({ open, onOpenChange, project, onSaved }: Prop
     setUsername(project.auth?.username ?? "")
     setValue("")
     setPassword("")
-    setVars(project.variables?.length ? project.variables : [])
-  }, [open, project])
+
+    // Start from saved variables, then add any suggested keys that aren't already present.
+    // This pre-populates empty rows so the user sees exactly what to fill.
+    const existing: ProjectVariable[] = project.variables?.length ? [...project.variables] : []
+    if (suggestedVariables?.length) {
+      const existingKeys = new Set(existing.map((v) => v.key))
+      for (const s of suggestedVariables) {
+        if (!existingKeys.has(s.key)) {
+          existing.push(s)
+          existingKeys.add(s.key)
+        }
+      }
+    }
+    setVars(existing)
+  }, [open, project, suggestedVariables])
 
   function updateVar(i: number, patch: Partial<ProjectVariable>) {
     setVars((rows) => rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
@@ -120,6 +135,20 @@ export function ProjectAuthDialog({ open, onOpenChange, project, onSaved }: Prop
             </select>
           </div>
 
+          {authType === "oauth2_client_credentials" && (
+            <div className="rounded-md bg-blue-500/10 border border-blue-500/20 px-3 py-2.5 text-xs text-blue-300 space-y-1">
+              <p className="font-medium">Auto-token: Olivia fetches a fresh token before every run.</p>
+              <p className="text-blue-400/70">Add these in Variables below (mark client_secret as 🔒):</p>
+              <pre className="font-mono text-[11px] text-blue-200/80 whitespace-pre-wrap">
+{`token_url   = https://api.example.com/oauth/token
+client_id   = your_client_id
+client_secret = your_secret  🔒
+scope       = your:scope another:scope
+grant_type  = client_credentials`}
+              </pre>
+            </div>
+          )}
+
           {(authType === "apiKey" || authType === "custom") && (
             <div>
               <label className="text-xs text-white/50">Header name</label>
@@ -143,7 +172,7 @@ export function ProjectAuthDialog({ open, onOpenChange, project, onSaved }: Prop
             </div>
           )}
 
-          {authType !== "none" && (
+          {authType !== "none" && authType !== "oauth2_client_credentials" && (
             <div>
               <label className="text-xs text-white/50">
                 {authType === "basic" ? "Password" : "Token / key value"}

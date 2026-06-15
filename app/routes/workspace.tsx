@@ -631,16 +631,12 @@ export default function Workspace() {
           <CardHeader>
             <CardTitle className="text-base inline-flex items-center gap-2">
               <HeartHandshake className="h-4 w-4 text-cyan-300" />
-              I know a friend
+              Add your Claude API key
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-white/55 leading-relaxed">
-              Have a colleague test the product without burning my tokens? Paste
-              their Anthropic API key here and all of your doc/QA generations
-              will run on their account. If empty, we fall back to the default
-              key. The key is encrypted at rest.
-            </p>
+              Add your Anthropic API key to run your tests on your own account.            </p>
             {keyError && (
               <p className="rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
                 {keyError}

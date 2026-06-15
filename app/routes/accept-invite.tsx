@@ -10,6 +10,8 @@ import { Button, buttonVariants } from "~/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "~/components/ui/card"
 import { useAuth } from "~/context/AuthContext"
 import { cn } from "~/lib/utils"
+import { googleLoginApi, isTwoFactorChallenge } from "~/api/authApi"
+import { GoogleSignInButton } from "~/components/GoogleSignInButton"
 
 function formatDate(value: string) {
   const date = new Date(value)
@@ -23,6 +25,7 @@ function formatDate(value: string) {
 
 export default function AcceptInvite() {
   const { user, login, logout } = useAuth()
+  const [ssoError, setSsoError] = useState<string | null>(null)
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const token = searchParams.get("token")?.trim() ?? ""
@@ -54,6 +57,22 @@ export default function AcceptInvite() {
       cancelled = true
     }
   }, [token])
+
+  async function handleGoogle(credential: string) {
+    setSsoError(null)
+    try {
+      const data = await googleLoginApi(credential)
+      if (isTwoFactorChallenge(data)) return
+      login(data)
+      if (token) {
+        const accepted = await acceptCompanyInvite(token)
+        login({ ...data, ...accepted, token: accepted.token ?? data.token })
+      }
+      navigate("/dashboard", { replace: true })
+    } catch (err) {
+      setSsoError(err instanceof Error ? err.message : "Google sign-in failed")
+    }
+  }
 
   async function handleAcceptExisting() {
     if (!token) return
@@ -110,6 +129,19 @@ export default function AcceptInvite() {
                 </p>
               </div>
 
+              {import.meta.env.VITE_GOOGLE_CLIENT_ID && (
+                <div className="mb-2 space-y-3">
+                  <GoogleSignInButton onCredential={handleGoogle} />
+                  {ssoError && (
+                    <p className="rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">{ssoError}</p>
+                  )}
+                  <div className="flex items-center gap-3 text-[11px] text-white/30">
+                    <div className="h-px flex-1 bg-white/10" />
+                    or
+                    <div className="h-px flex-1 bg-white/10" />
+                  </div>
+                </div>
+              )}
               <div className="grid gap-2">
                 <Link
                   to={`/signup?token=${encodeURIComponent(token)}`}

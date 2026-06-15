@@ -22,6 +22,7 @@ const GROUP_STYLE: Record<QaTestGroup, string> = {
   sad: "bg-amber-500/15 text-amber-400 border-amber-500/30",
   boundary: "bg-purple-500/15 text-purple-400 border-purple-500/30",
   security: "bg-red-500/15 text-red-400 border-red-500/30",
+  chain: "bg-violet-500/15 text-violet-400 border-violet-500/30",
 }
 
 const SEVERITY_STYLE: Record<string, string> = {
@@ -73,7 +74,7 @@ export function QaRunView({ run, repoLabel }: QaRunViewProps) {
             {run.bugCount} {run.bugCount === 1 ? "bug" : "bugs"} found
           </Badge>
         </div>
-        {run.postmanCollection && (
+        {Boolean(run.postmanCollection) && (
           <Button
             type="button"
             size="sm"

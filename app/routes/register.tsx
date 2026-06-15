@@ -5,10 +5,11 @@ import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "~/components/ui/card"
 import { useAuth } from "~/context/AuthContext"
-import { registerApi } from "~/api/authApi"
+import { registerApi, googleLoginApi, isTwoFactorChallenge } from "~/api/authApi"
+import { GoogleSignInButton } from "~/components/GoogleSignInButton"
 
 export default function Register() {
-  const { user } = useAuth()
+  const { user, login } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const inviteToken = searchParams.get("token")?.trim()
@@ -49,6 +50,21 @@ export default function Register() {
       return "Password must contain at least one symbol."
     }
     return null
+  }
+
+  async function handleGoogle(credential: string) {
+    setError(null)
+    setLoading(true)
+    try {
+      const data = await googleLoginApi(credential)
+      if (isTwoFactorChallenge(data)) return
+      login(data)
+      navigate(inviteToken ? `/accept-invite?token=${encodeURIComponent(inviteToken)}` : "/dashboard", { replace: true })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Google sign-in failed")
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -105,6 +121,16 @@ export default function Register() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {import.meta.env.VITE_GOOGLE_CLIENT_ID && (
+            <div className="mb-4 space-y-3">
+              <GoogleSignInButton onCredential={handleGoogle} />
+              <div className="flex items-center gap-3 text-[11px] text-white/30">
+                <div className="h-px flex-1 bg-white/10" />
+                or
+                <div className="h-px flex-1 bg-white/10" />
+              </div>
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
