@@ -1,6 +1,6 @@
 import { useEffect } from "react"
 import { Link, useNavigate } from "react-router"
-import { ArrowRight, BookOpen, Boxes, Server, Settings, Sparkles } from "lucide-react"
+import { ArrowRight, BookOpen, Boxes, FlaskConical, Server, Settings, Sparkles } from "lucide-react"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { useAuth } from "~/context/AuthContext"
 import { cn } from "~/lib/utils"
@@ -21,6 +21,14 @@ const options = [
     action: "Open MCP workspace",
     icon: Server,
     accent: "text-purple-300 bg-purple-500/10 border-purple-500/20",
+  },
+  {
+    title: "Front End Automation",
+    description: "Upload a demo video and Olivia writes your Playwright E2E tests — BDD test cases, self-healing runs, committed to your repo.",
+    to: "/e2e-qa",
+    action: "Open Front End workspace",
+    icon: FlaskConical,
+    accent: "text-emerald-300 bg-emerald-500/10 border-emerald-500/20",
   },
   {
     title: "Workspace Members",

@@ -145,7 +145,11 @@ export default function Login() {
             </div>
           )}
           {!twoFactorToken ? (
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form
+              onSubmit={handleSubmit}
+              className="space-y-4"
+              data-testid="login-form"
+            >
               <div className="space-y-1.5">
                 <label className="text-xs text-white/60">Email</label>
                 <Input
@@ -154,6 +158,7 @@ export default function Login() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  data-testid="login-email"
                   className="bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-blue-500/50"
                 />
               </div>
@@ -165,12 +170,16 @@ export default function Login() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  data-testid="login-password"
                   className="bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-blue-500/50"
                 />
               </div>
 
               {error && (
-                <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-md px-3 py-2">
+                <p
+                  className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-md px-3 py-2"
+                  data-testid="login-error"
+                >
                   {error}
                 </p>
               )}
@@ -178,6 +187,7 @@ export default function Login() {
               <Button
                 type="submit"
                 disabled={loading}
+                data-testid="login-submit"
                 className="w-full bg-blue-600 hover:bg-blue-500 text-white"
               >
                 {loading ? "Signing in..." : "Sign in"}

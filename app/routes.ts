@@ -19,5 +19,6 @@ export default [
   route("docs", "routes/docs.tsx"),
   route("docs/:owner/:repo", "routes/docs.$owner.$repo.tsx"),
   route("swagger-qa", "routes/swagger-qa.tsx"),
+  route("e2e-qa", "routes/e2e-qa.tsx"),
   route("*", "routes/catch-all.tsx"),
 ] satisfies RouteConfig

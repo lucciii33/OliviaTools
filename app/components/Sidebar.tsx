@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { BookOpen, FileCode, Menu, Settings } from "lucide-react"
+import { BookOpen, FileCode, FlaskConical, Menu, Settings } from "lucide-react"
 import { Link, useLocation } from "react-router"
 import { Button } from "~/components/ui/button"
 import {
@@ -25,6 +25,7 @@ function SidebarContent() {
   const isAllActive = location.pathname === "/docs"
   const isWorkspaceActive = location.pathname === "/workspace"
   const isSwaggerActive = location.pathname === "/swagger-qa"
+  const isE2eActive = location.pathname === "/e2e-qa"
 
   useEffect(() => {
     getInstallations()
@@ -50,6 +51,16 @@ function SidebarContent() {
           <span className="inline-flex items-center gap-2">
             <FileCode className="h-3.5 w-3.5" />
             Olivia + Swagger
+          </span>
+        </Link>
+
+        <Link
+          to="/e2e-qa"
+          className={cn(itemBase, "mb-3", isE2eActive ? itemActive : itemIdle)}
+        >
+          <span className="inline-flex items-center gap-2">
+            <FlaskConical className="h-3.5 w-3.5" />
+            E2E QA (Playwright)
           </span>
         </Link>
 
