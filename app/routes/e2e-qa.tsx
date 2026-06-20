@@ -17,6 +17,7 @@ import { Button } from "~/components/ui/button"
 import { Sidebar } from "~/components/Sidebar"
 import { useAuth } from "~/context/AuthContext"
 import { useE2eApi, type E2eProject, type E2eTest } from "~/api/e2eApi"
+import { useInstallationsApi } from "~/api/installationsApi"
 import { cn } from "~/lib/utils"
 
 // Feature 1 — E2E QA assistant: upload a demo video → Whisper transcribes it →
@@ -37,6 +38,9 @@ export default function E2eQa() {
     loading,
     error,
   } = useE2eApi()
+  // Reuse the existing connected-repos list (GitHub App installations) — same
+  // source the Docs/API feature uses. We don't touch that code.
+  const { installations, getInstallations } = useInstallationsApi()
 
   const [projects, setProjects] = useState<E2eProject[]>([])
   const [project, setProject] = useState<E2eProject | null>(null)
@@ -45,6 +49,7 @@ export default function E2eQa() {
   // new-project inline form
   const [newName, setNewName] = useState("")
   const [newBaseUrl, setNewBaseUrl] = useState("")
+  const [newRepo, setNewRepo] = useState("") // "owner/repo" from the dropdown
   const [creating, setCreating] = useState(false)
 
   const fileRef = useRef<HTMLInputElement>(null)
@@ -59,6 +64,7 @@ export default function E2eQa() {
       return
     }
     listProjects().then(setProjects)
+    getInstallations()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user])
 
@@ -70,11 +76,17 @@ export default function E2eQa() {
   async function handleCreate() {
     if (!newName.trim()) return
     setCreating(true)
-    const p = await createProject({ name: newName.trim(), baseUrl: newBaseUrl.trim() })
+    const [owner, repo] = newRepo.split("/")
+    const p = await createProject({
+      name: newName.trim(),
+      baseUrl: newBaseUrl.trim(),
+      github: owner && repo ? { owner, repo } : undefined,
+    })
     setCreating(false)
     if (p) {
       setNewName("")
       setNewBaseUrl("")
+      setNewRepo("")
       setProjects(await listProjects())
       openProject(p)
     }
@@ -163,6 +175,26 @@ export default function E2eQa() {
                   onChange={(e) => setNewBaseUrl(e.target.value)}
                 />
               </div>
+              <div className="flex-1">
+                <label className="text-sm font-medium">
+                  Repo (so the AI can reuse your helpers)
+                </label>
+                <select
+                  className="mt-1 w-full rounded-md border px-3 py-2 text-sm bg-background"
+                  value={newRepo}
+                  onChange={(e) => setNewRepo(e.target.value)}
+                >
+                  <option value="">No repo (improve without repo context)</option>
+                  {installations.map((i) => (
+                    <option
+                      key={`${i.owner}/${i.repo}`}
+                      value={`${i.owner}/${i.repo}`}
+                    >
+                      {i.owner}/{i.repo}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <Button onClick={handleCreate} disabled={creating || !newName.trim()}>
                 {creating ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -203,8 +235,13 @@ export default function E2eQa() {
             <h1 className="text-2xl font-semibold mb-1">
               {project.title || project.name}
             </h1>
-            <p className="text-muted-foreground mb-4">
+            <p className="text-muted-foreground mb-1">
               {project.baseUrl || "no base URL set"}
+            </p>
+            <p className="text-xs text-muted-foreground mb-4">
+              {project.github?.owner && project.github?.repo
+                ? `🔗 repo: ${project.github.owner}/${project.github.repo}`
+                : "no repo connected — improve runs without repo context"}
             </p>
 
             {/* One-time login capture — every recording/run starts logged in */}

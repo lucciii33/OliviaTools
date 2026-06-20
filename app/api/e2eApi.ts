@@ -90,6 +90,7 @@ export function useE2eApi() {
     name: string
     title?: string
     baseUrl?: string
+    github?: { owner: string; repo: string; branch?: string; testDir?: string }
   }): Promise<E2eProject | null> => {
     setError(null)
     const res = await apiFetch(`/api/e2e/projects`, {
