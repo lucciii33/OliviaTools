@@ -2,13 +2,16 @@ import { useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router"
 import {
   ArrowLeft,
+  CheckCircle2,
   Circle,
   FileVideo,
   Loader2,
   LogIn,
   Plus,
+  Sparkles,
   Trash2,
   Upload,
+  XCircle,
 } from "lucide-react"
 import { Button } from "~/components/ui/button"
 import { Sidebar } from "~/components/Sidebar"
@@ -29,6 +32,7 @@ export default function E2eQa() {
     listTests,
     recordLogin,
     recordTest,
+    improveTest,
     deleteTest,
     loading,
     error,
@@ -46,6 +50,7 @@ export default function E2eQa() {
   const fileRef = useRef<HTMLInputElement>(null)
   const [videoName, setVideoName] = useState<string | null>(null)
   const [recordingId, setRecordingId] = useState<string | null>(null)
+  const [improvingId, setImprovingId] = useState<string | null>(null)
   const [authing, setAuthing] = useState(false)
 
   useEffect(() => {
@@ -106,6 +111,13 @@ export default function E2eQa() {
       // refresh so the saved spec + new status show up
       if (project) setTests(await listTests(project._id))
     }
+  }
+
+  async function handleImprove(id: string) {
+    setImprovingId(id)
+    const res = await improveTest(id)
+    setImprovingId(null)
+    if (res && project) setTests(await listTests(project._id))
   }
 
   async function handleDeleteTest(id: string) {
@@ -284,11 +296,21 @@ export default function E2eQa() {
                         )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
+                        {t.status === "passing" && (
+                          <span className="flex items-center gap-1 text-xs font-medium text-emerald-600">
+                            <CheckCircle2 className="h-4 w-4" /> Passing
+                          </span>
+                        )}
+                        {t.status === "failing" && (
+                          <span className="flex items-center gap-1 text-xs font-medium text-red-600">
+                            <XCircle className="h-4 w-4" /> Failing
+                          </span>
+                        )}
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => handleRecord(t._id)}
-                          disabled={recordingId !== null}
+                          disabled={recordingId !== null || improvingId !== null}
                         >
                           {recordingId === t._id ? (
                             <>
@@ -298,6 +320,31 @@ export default function E2eQa() {
                             <>
                               <Circle className="h-4 w-4 fill-red-500 text-red-500" />
                               {t.specCode ? "Re-record" : "Record"}
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => handleImprove(t._id)}
+                          disabled={
+                            !t.specCode ||
+                            improvingId !== null ||
+                            recordingId !== null
+                          }
+                          title={
+                            t.specCode
+                              ? "Read the repo, rewrite senior-quality & self-heal until green"
+                              : "Record the test first"
+                          }
+                        >
+                          {improvingId === t._id ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" /> Improving &
+                              healing…
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="h-4 w-4" /> Improve
                             </>
                           )}
                         </Button>
@@ -335,11 +382,47 @@ export default function E2eQa() {
                     {t.specCode && (
                       <details className="mt-3">
                         <summary className="cursor-pointer text-xs text-muted-foreground">
-                          Recorded Playwright spec
+                          Playwright spec
                         </summary>
                         <pre className="mt-2 max-h-72 overflow-auto rounded-md bg-muted p-3 text-xs">
                           {t.specCode}
                         </pre>
+                      </details>
+                    )}
+
+                    {t.heal && t.heal.length > 0 && (
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-xs text-muted-foreground">
+                          Heal log ({t.heal.length} attempt
+                          {t.heal.length > 1 ? "s" : ""})
+                        </summary>
+                        <div className="mt-2 space-y-2">
+                          {t.heal.map((h) => (
+                            <div
+                              key={h.attempt}
+                              className="rounded-md border p-2 text-xs"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">
+                                  Attempt {h.attempt}
+                                </span>
+                                {h.passed ? (
+                                  <span className="text-emerald-600">✓ passed</span>
+                                ) : (
+                                  <span className="text-red-600">✗ failed</span>
+                                )}
+                                <span className="text-muted-foreground">
+                                  {(h.durationMs / 1000).toFixed(1)}s
+                                </span>
+                              </div>
+                              {!h.passed && h.error && (
+                                <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap text-[11px] text-red-700">
+                                  {h.error}
+                                </pre>
+                              )}
+                            </div>
+                          ))}
+                        </div>
                       </details>
                     )}
                   </div>

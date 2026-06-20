@@ -33,6 +33,7 @@ export interface E2eTest {
   videoUrl?: string
   specCode?: string
   status: E2eTestStatus
+  heal?: { attempt: number; passed: boolean; error: string; durationMs: number }[]
   createdAt: string
 }
 
@@ -230,6 +231,39 @@ export function useE2eApi() {
     }
   }
 
+  // Feature 3: reads the repo, has Claude rewrite the recording to senior
+  // quality (DRY, reused helpers, real selectors, assertions), then runs +
+  // self-heals it until it passes. Stays open while the heal loop runs, then
+  // returns the green spec and the per-attempt heal log.
+  const improveTest = async (
+    testId: string
+  ): Promise<{
+    specCode: string
+    status: E2eTestStatus
+    passed: boolean
+    heal: { attempt: number; passed: boolean; error: string; durationMs: number }[]
+    repo: { files: number; testIds: number }
+  } | null> => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await apiFetch(`/api/e2e/tests/${testId}/improve`, {
+        method: "POST",
+      })
+      if (!res.ok) {
+        const body = await res.text()
+        setError(body || `Improve failed (${res.status})`)
+        return null
+      }
+      return await res.json()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Improve failed")
+      return null
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return {
     loading,
     error,
@@ -241,6 +275,7 @@ export function useE2eApi() {
     listTests,
     recordLogin,
     recordTest,
+    improveTest,
     deleteTest,
   }
 }

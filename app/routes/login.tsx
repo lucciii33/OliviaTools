@@ -194,7 +194,7 @@ export default function Login() {
               </Button>
             </form>
           ) : (
-            <form onSubmit={handleVerify2FA} className="space-y-4">
+            <form onSubmit={handleVerify2FA} className="space-y-4" data-testid="login-2fa-form">
               <div className="space-y-1.5">
                 <label className="text-xs text-white/60">Authentication code</label>
                 <Input
@@ -207,6 +207,7 @@ export default function Login() {
                   required
                   autoFocus
                   maxLength={32}
+                  data-testid="login-2fa-code"
                   className="bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-blue-500/50 tracking-widest text-center"
                 />
                 <p className="text-[10px] text-white/40">
@@ -223,6 +224,7 @@ export default function Login() {
               <Button
                 type="submit"
                 disabled={loading || twoFactorCode.trim().length === 0}
+                data-testid="login-2fa-submit"
                 className="w-full bg-blue-600 hover:bg-blue-500 text-white"
               >
                 {loading ? "Verifying..." : "Verify"}
@@ -231,6 +233,7 @@ export default function Login() {
                 type="button"
                 variant="ghost"
                 onClick={cancelTwoFactor}
+                data-testid="login-2fa-cancel"
                 className="w-full text-white/60 hover:text-white hover:bg-white/10"
               >
                 Use a different account

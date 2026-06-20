@@ -131,7 +131,7 @@ export default function Register() {
               </div>
             </div>
           )}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" data-testid="register-form">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="text-xs text-white/60">First name</label>
@@ -141,6 +141,7 @@ export default function Register() {
                   value={form.firstName}
                   onChange={handleChange}
                   required
+                  data-testid="register-first-name"
                   className="bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-blue-500/50"
                 />
               </div>
@@ -152,6 +153,7 @@ export default function Register() {
                   value={form.lastName}
                   onChange={handleChange}
                   required
+                  data-testid="register-last-name"
                   className="bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-blue-500/50"
                 />
               </div>
@@ -165,6 +167,7 @@ export default function Register() {
                 value={form.email}
                 onChange={handleChange}
                 required
+                data-testid="register-email"
                 className="bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-blue-500/50"
               />
             </div>
@@ -177,6 +180,7 @@ export default function Register() {
                 value={form.password}
                 onChange={handleChange}
                 required
+                data-testid="register-password"
                 className="bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-blue-500/50"
               />
             </div>
@@ -189,6 +193,7 @@ export default function Register() {
                   value={form.pais}
                   onChange={handleChange}
                   required
+                  data-testid="register-country"
                   className="bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-blue-500/50"
                 />
               </div>
@@ -202,6 +207,7 @@ export default function Register() {
                   value={form.edad}
                   onChange={handleChange}
                   required
+                  data-testid="register-age"
                   className="bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-blue-500/50"
                 />
               </div>
@@ -213,13 +219,17 @@ export default function Register() {
                 checked={form.terms}
                 onChange={handleChange}
                 required
+                data-testid="register-terms"
                 className="mt-0.5 h-4 w-4 rounded border-white/20 bg-white/10"
               />
               <span>I accept the terms and workspace membership rules.</span>
             </label>
 
             {error && (
-              <p className="whitespace-pre-line text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-md px-3 py-2">
+              <p
+                className="whitespace-pre-line text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-md px-3 py-2"
+                data-testid="register-error"
+              >
                 {error}
               </p>
             )}
@@ -227,6 +237,7 @@ export default function Register() {
             <Button
               type="submit"
               disabled={loading}
+              data-testid="register-submit"
               className="w-full bg-blue-600 hover:bg-blue-500 text-white"
             >
               {loading ? "Creating account…" : "Create account"}
@@ -235,7 +246,11 @@ export default function Register() {
 
           <p className="text-center text-xs text-white/40 mt-4">
             Already have an account?{" "}
-            <Link to="/login" className="text-blue-400 hover:text-blue-300 underline">
+            <Link
+              to="/login"
+              className="text-blue-400 hover:text-blue-300 underline"
+              data-testid="register-login-link"
+            >
               Log in
             </Link>
           </p>
