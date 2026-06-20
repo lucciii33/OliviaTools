@@ -177,7 +177,7 @@ export default function Home() {
           </Link>
 
           <div className="flex items-center gap-2">
-            <a
+            {/* <a
               href="#pricing"
               className={cn(
                 buttonVariants({ variant: "ghost", size: "sm" }),
@@ -185,7 +185,7 @@ export default function Home() {
               )}
             >
               Pricing
-            </a>
+            </a> */}
             <Link
               to="/login"
               className={cn(
@@ -516,7 +516,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section id="pricing" className="border-y border-white/10 bg-white/[0.02] px-5 py-12 md:px-8 md:py-16">
+        {/* <section id="pricing" className="border-y border-white/10 bg-white/[0.02] px-5 py-12 md:px-8 md:py-16">
           <div className="mx-auto max-w-7xl">
             <div className="mb-8 max-w-3xl">
               <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200/70">
@@ -579,7 +579,7 @@ export default function Home() {
               ))}
             </div>
           </div>
-        </section>
+        </section> */}
 
         <section className="px-5 pb-14 md:px-8 md:pb-20">
           <div className="mx-auto max-w-7xl rounded-lg border border-cyan-300/20 bg-cyan-400/10 p-6 md:flex md:items-center md:justify-between md:gap-8">
