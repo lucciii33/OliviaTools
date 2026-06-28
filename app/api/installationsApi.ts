@@ -2,8 +2,11 @@ import { useState } from "react"
 import { getAuthToken } from "~/auth"
 
 export interface Installation {
+  installationId: number
   owner: string
   repo: string
+  fullName?: string
+  accountType?: string
 }
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? ""

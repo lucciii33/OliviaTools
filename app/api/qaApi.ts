@@ -124,6 +124,15 @@ export interface ProjectVariable {
   secret: boolean
 }
 
+export interface ProjectGithubLink {
+  owner?: string
+  repo?: string
+  specPath?: string
+  installationId?: number
+  defaultBranch?: string
+  lastSyncedAt?: string
+}
+
 export interface ApiProject {
   _id: string
   name: string
@@ -133,7 +142,15 @@ export interface ApiProject {
   baseUrl: string
   auth: ProjectAuth
   variables: ProjectVariable[]
+  github?: ProjectGithubLink
   updatedAt?: string
+}
+
+// One spec file found in a connected repo.
+export interface SpecCandidate {
+  path: string
+  sha: string
+  size: number
 }
 
 export function useQaApi() {
@@ -237,6 +254,90 @@ export function useQaApi() {
       return (await res.json()) as ImportResult
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import failed")
+      return null
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Connected-repo flow: scan a repo for spec files matching the name the
+  // user typed. Returns the candidates so the user confirms the right file.
+  const discoverGithubSpec = async (payload: {
+    installationId: number
+    owner: string
+    repo: string
+    filename: string
+  }): Promise<SpecCandidate[]> => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await apiFetch(`/api/qa/projects/github/discover`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const body = await res.text()
+        setError(body || `Scan failed (${res.status})`)
+        return []
+      }
+      const data = (await res.json()) as { candidates: SpecCandidate[] }
+      return data.candidates ?? []
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Scan failed")
+      return []
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Import a confirmed spec file from the repo → creates/updates the project
+  // and stamps the GitHub link so it can be re-synced.
+  const importGithubSpec = async (payload: {
+    installationId: number
+    owner: string
+    repo: string
+    specPath: string
+    projectId?: string
+  }): Promise<ImportResult | null> => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await apiFetch(`/api/qa/projects/github/import`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const body = await res.text()
+        setError(body || `Import failed (${res.status})`)
+        return null
+      }
+      return (await res.json()) as ImportResult
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Import failed")
+      return null
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // "Sync" button: re-fetch the linked spec from the repo and re-import it.
+  const syncGithubSpec = async (
+    projectId: string
+  ): Promise<ImportResult | null> => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await apiFetch(`/api/qa/projects/${projectId}/sync`, {
+        method: "POST",
+      })
+      if (!res.ok) {
+        const body = await res.text()
+        setError(body || `Sync failed (${res.status})`)
+        return null
+      }
+      return (await res.json()) as ImportResult
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sync failed")
       return null
     } finally {
       setLoading(false)
@@ -379,6 +480,9 @@ export function useQaApi() {
     getRuns,
     getRun,
     importProjectSpec,
+    discoverGithubSpec,
+    importGithubSpec,
+    syncGithubSpec,
     listProjects,
     getProjectDocs,
     saveProjectAuth,

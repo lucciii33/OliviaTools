@@ -7,9 +7,12 @@ import {
   Download,
   FileCode,
   Info,
+  Link2,
   Loader2,
   Play,
+  RefreshCw,
   RotateCcw,
+  Search,
   Settings2,
   Trash2,
   X,
@@ -26,8 +29,10 @@ import {
   type ApiProject,
   type BugRecord,
   type QaRun,
+  type SpecCandidate,
   type SuiteRun,
 } from "~/api/qaApi"
+import { useInstallationsApi } from "~/api/installationsApi"
 import { cn } from "~/lib/utils"
 
 // Standalone product: paste a Swagger/OpenAPI spec → it becomes an API project
@@ -38,6 +43,9 @@ export default function SwaggerQa() {
   const navigate = useNavigate()
   const {
     importProjectSpec,
+    discoverGithubSpec,
+    importGithubSpec,
+    syncGithubSpec,
     listProjects,
     getProjectDocs,
     getSectionCollection,
@@ -46,10 +54,19 @@ export default function SwaggerQa() {
     loading,
     error,
   } = useQaApi()
+  const { installations, getInstallations } = useInstallationsApi()
 
   const [projects, setProjects] = useState<ApiProject[]>([])
   const [specText, setSpecText] = useState("")
   const [importing, setImporting] = useState(false)
+
+  // Import mode: paste a spec, or connect a repo and let Olivia find the file.
+  const [importMode, setImportMode] = useState<"paste" | "github">("paste")
+  const [ghRepo, setGhRepo] = useState("") // "owner/repo" from the dropdown
+  const [ghFilename, setGhFilename] = useState("")
+  const [ghCandidates, setGhCandidates] = useState<SpecCandidate[] | null>(null)
+  const [scanning, setScanning] = useState(false)
+  const [syncing, setSyncing] = useState(false)
 
   // selected project view
   const [project, setProject] = useState<ApiProject | null>(null)
@@ -76,6 +93,7 @@ export default function SwaggerQa() {
       return
     }
     listProjects().then(setProjects)
+    getInstallations()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user])
 
@@ -139,6 +157,65 @@ export default function SwaggerQa() {
       }
       await listProjects().then(setProjects)
       await openProject(res.projectId)
+    }
+  }
+
+  // Split "owner/repo" back into its installation + parts.
+  function selectedInstallation() {
+    return installations.find((i) => `${i.owner}/${i.repo}` === ghRepo) ?? null
+  }
+
+  // Scan the connected repo for spec files matching the typed name.
+  async function handleScanRepo() {
+    const inst = selectedInstallation()
+    if (!inst) return
+    setScanning(true)
+    setGhCandidates(null)
+    const found = await discoverGithubSpec({
+      installationId: inst.installationId,
+      owner: inst.owner,
+      repo: inst.repo,
+      filename: ghFilename.trim(),
+    })
+    setGhCandidates(found)
+    setScanning(false)
+  }
+
+  // Import a confirmed candidate file from the repo.
+  async function handleImportFromRepo(specPath: string) {
+    const inst = selectedInstallation()
+    if (!inst) return
+    setImporting(true)
+    const res = await importGithubSpec({
+      installationId: inst.installationId,
+      owner: inst.owner,
+      repo: inst.repo,
+      specPath,
+    })
+    setImporting(false)
+    if (res) {
+      setGhCandidates(null)
+      setGhFilename("")
+      if (res.requiredVariables?.length || res.autoFilledVariables?.length) {
+        setImportHint({
+          autoFilled: res.autoFilledVariables ?? [],
+          required: res.requiredVariables ?? [],
+        })
+      }
+      await listProjects().then(setProjects)
+      await openProject(res.projectId)
+    }
+  }
+
+  // "Sync" button on a repo-linked project: re-pull the spec and refresh.
+  async function handleSync() {
+    if (!project) return
+    setSyncing(true)
+    const res = await syncGithubSpec(project._id)
+    setSyncing(false)
+    if (res) {
+      await openProject(project._id)
+      await listProjects().then(setProjects)
     }
   }
 
@@ -222,22 +299,166 @@ export default function SwaggerQa() {
               <p className="text-xs text-white/40 uppercase tracking-wider">
                 Import a spec
               </p>
-              <textarea
-                value={specText}
-                onChange={(e) => setSpecText(e.target.value)}
-                placeholder={"Paste your spec here (YAML or JSON)…\n\nopenapi: 3.0.0\ninfo:\n  title: My API"}
-                rows={12}
-                className="w-full rounded-lg bg-black/30 border border-white/10 p-3.5 font-mono text-xs text-white/85 resize-y focus:outline-none focus:ring-1 focus:ring-blue-500/40"
-              />
-              {error && <p className="text-sm text-red-400">{error}</p>}
-              <Button
-                onClick={handleGenerate}
-                disabled={importing || !specText.trim()}
-                className="bg-blue-600 hover:bg-blue-500 gap-1.5"
-              >
-                {importing && <Loader2 className="h-4 w-4 animate-spin" />}
-                Generate
-              </Button>
+
+              {/* Mode toggle: paste vs. connect a repo */}
+              <div className="inline-flex rounded-lg border border-white/10 bg-black/30 p-0.5 text-xs">
+                <button
+                  onClick={() => setImportMode("paste")}
+                  className={cn(
+                    "px-3 py-1.5 rounded-md transition-colors",
+                    importMode === "paste"
+                      ? "bg-white/10 text-white"
+                      : "text-white/40 hover:text-white/70"
+                  )}
+                >
+                  Paste spec
+                </button>
+                <button
+                  onClick={() => setImportMode("github")}
+                  className={cn(
+                    "px-3 py-1.5 rounded-md transition-colors inline-flex items-center gap-1.5",
+                    importMode === "github"
+                      ? "bg-white/10 text-white"
+                      : "text-white/40 hover:text-white/70"
+                  )}
+                >
+                  <Link2 className="h-3.5 w-3.5" />
+                  From a repo
+                </button>
+              </div>
+
+              {importMode === "paste" && (
+                <>
+                  <textarea
+                    value={specText}
+                    onChange={(e) => setSpecText(e.target.value)}
+                    placeholder={"Paste your spec here (YAML or JSON)…\n\nopenapi: 3.0.0\ninfo:\n  title: My API"}
+                    rows={12}
+                    className="w-full rounded-lg bg-black/30 border border-white/10 p-3.5 font-mono text-xs text-white/85 resize-y focus:outline-none focus:ring-1 focus:ring-blue-500/40"
+                  />
+                  {error && <p className="text-sm text-red-400">{error}</p>}
+                  <Button
+                    onClick={handleGenerate}
+                    disabled={importing || !specText.trim()}
+                    className="bg-blue-600 hover:bg-blue-500 gap-1.5"
+                  >
+                    {importing && <Loader2 className="h-4 w-4 animate-spin" />}
+                    Generate
+                  </Button>
+                </>
+              )}
+
+              {importMode === "github" && (
+                <div className="space-y-3">
+                  {installations.length === 0 ? (
+                    <p className="text-sm text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-md px-4 py-3">
+                      No connected repos yet. Connect a repo from the GitHub app
+                      first, then come back.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] items-end">
+                        <div>
+                          <label className="text-xs text-white/40 block mb-1">
+                            Repository
+                          </label>
+                          <select
+                            value={ghRepo}
+                            onChange={(e) => {
+                              setGhRepo(e.target.value)
+                              setGhCandidates(null)
+                            }}
+                            className="w-full rounded-md bg-black/30 border border-white/10 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/40"
+                          >
+                            <option value="">Select a repo…</option>
+                            {installations.map((i) => (
+                              <option
+                                key={`${i.owner}/${i.repo}`}
+                                value={`${i.owner}/${i.repo}`}
+                              >
+                                {i.owner}/{i.repo}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-xs text-white/40 block mb-1">
+                            Spec file name
+                          </label>
+                          <input
+                            value={ghFilename}
+                            onChange={(e) => setGhFilename(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && ghRepo) handleScanRepo()
+                            }}
+                            placeholder="openapi.yml"
+                            className="w-full rounded-md bg-black/30 border border-white/10 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-blue-500/40"
+                          />
+                        </div>
+                        <Button
+                          onClick={handleScanRepo}
+                          disabled={!ghRepo || scanning}
+                          variant="outline"
+                          className="border-white/15 text-white/80 hover:bg-white/10 gap-1.5"
+                        >
+                          {scanning ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Search className="h-4 w-4" />
+                          )}
+                          Find
+                        </Button>
+                      </div>
+                      <p className="text-xs text-white/30">
+                        Tell Olivia the file name (e.g. <code>openapi.yml</code>)
+                        and she'll scan the repo for it. Leave it blank to list
+                        every spec-looking file.
+                      </p>
+
+                      {error && <p className="text-sm text-red-400">{error}</p>}
+
+                      {ghCandidates && (
+                        <div className="space-y-2">
+                          {ghCandidates.length === 0 ? (
+                            <p className="text-sm text-white/40">
+                              No matching spec files found. Try a different name.
+                            </p>
+                          ) : (
+                            <>
+                              <p className="text-xs text-white/40 uppercase tracking-wider">
+                                {ghCandidates.length} match
+                                {ghCandidates.length === 1 ? "" : "es"} — pick one
+                              </p>
+                              {ghCandidates.map((c) => (
+                                <div
+                                  key={c.path}
+                                  className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.02] px-4 py-2.5"
+                                >
+                                  <FileCode className="h-4 w-4 text-blue-400 shrink-0" />
+                                  <span className="font-mono text-sm text-white/80 truncate flex-1">
+                                    {c.path}
+                                  </span>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleImportFromRepo(c.path)}
+                                    disabled={importing}
+                                    className="bg-blue-600 hover:bg-blue-500 gap-1.5 shrink-0"
+                                  >
+                                    {importing && (
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    )}
+                                    Import
+                                  </Button>
+                                </div>
+                              ))}
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -277,6 +498,23 @@ export default function SwaggerQa() {
                   <span className="text-xs text-violet-400">
                     {allProgress.done}/{allProgress.total} sections…
                   </span>
+                )}
+                {project.source === "github" && project.github?.specPath && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-white/15 text-white/80 hover:bg-white/10 gap-1.5"
+                    onClick={handleSync}
+                    disabled={syncing}
+                    title={`Re-pull ${project.github.specPath} from ${project.github.owner}/${project.github.repo}`}
+                  >
+                    {syncing ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    )}
+                    Sync
+                  </Button>
                 )}
                 <Button
                   size="sm"

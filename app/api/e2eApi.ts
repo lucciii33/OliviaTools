@@ -55,16 +55,43 @@ export interface E2eProjectGithub {
   testDir: string
 }
 
+// A run target (local/staging/prod). Each keeps its OWN login session, so a
+// staging login is never reused on prod.
+export interface E2eEnvironment {
+  name: string
+  baseUrl: string
+  loginUrl?: string
+  authReady: boolean
+  authSavedAt: string | null
+}
+
 export interface E2eProject {
   _id: string
   name: string
   title: string
   baseUrl: string
   login: E2eProjectLogin
+  environments: E2eEnvironment[]
   github: E2eProjectGithub
   variables: { key: string; value: string; secret: boolean }[]
   updatedAt?: string
 }
+
+// recordTest can succeed with a spec, or come back asking to capture the login
+// for the chosen environment first (the LOGIN_REQUIRED gate).
+export type RecordTestResult =
+  | { specCode: string; status: string }
+  | { loginRequired: true; env: string | null }
+
+export type ImproveTestResult =
+  | {
+      specCode: string
+      status: E2eTestStatus
+      passed: boolean
+      heal: { attempt: number; passed: boolean; error: string; durationMs: number }[]
+      repo: { files: number; testIds: number }
+    }
+  | { loginRequired: true; env: string | null }
 
 export interface GenerateFromVideoResult {
   transcript: string
@@ -90,6 +117,7 @@ export function useE2eApi() {
     name: string
     title?: string
     baseUrl?: string
+    environments?: { name: string; baseUrl: string; loginUrl?: string }[]
     github?: { owner: string; repo: string; branch?: string; testDir?: string }
   }): Promise<E2eProject | null> => {
     setError(null)
@@ -111,6 +139,7 @@ export function useE2eApi() {
       title: string
       baseUrl: string
       login: Partial<E2eProjectLogin> & { password?: string }
+      environments: { name: string; baseUrl: string; loginUrl?: string }[]
       github: Partial<E2eProjectGithub>
       variables: { key: string; value: string; secret: boolean }[]
     }>
@@ -184,13 +213,15 @@ export function useE2eApi() {
   // Feature 2: capture the login session ONCE. Opens the recorder at the login
   // page; the user logs in by hand and the session is saved for the project.
   const recordLogin = async (
-    projectId: string
+    projectId: string,
+    env?: string
   ): Promise<{ authReady: boolean; authSavedAt: string } | null> => {
     setLoading(true)
     setError(null)
     try {
       const res = await apiFetch(`/api/e2e/projects/${projectId}/record-login`, {
         method: "POST",
+        body: JSON.stringify({ env }),
       })
       if (!res.ok) {
         const body = await res.text()
@@ -210,17 +241,25 @@ export function useE2eApi() {
   // request stays open until the user closes the recorder window, then returns
   // the generated spec.
   const recordTest = async (
-    testId: string
-  ): Promise<{ specCode: string; status: string } | null> => {
+    testId: string,
+    env?: string
+  ): Promise<RecordTestResult | null> => {
     setLoading(true)
     setError(null)
     try {
       const res = await apiFetch(`/api/e2e/tests/${testId}/record`, {
         method: "POST",
+        body: JSON.stringify({ env }),
       })
       if (!res.ok) {
-        const body = await res.text()
-        setError(body || `Recording failed (${res.status})`)
+        const bodyText = await res.text()
+        if (res.status === 409) {
+          const body = bodyText ? safeJson(bodyText) : null
+          if (body?.code === "LOGIN_REQUIRED") {
+            return { loginRequired: true, env: body.env ?? null }
+          }
+        }
+        setError(bodyText || `Recording failed (${res.status})`)
         return null
       }
       return (await res.json()) as { specCode: string; status: string }
@@ -237,23 +276,25 @@ export function useE2eApi() {
   // self-heals it until it passes. Stays open while the heal loop runs, then
   // returns the green spec and the per-attempt heal log.
   const improveTest = async (
-    testId: string
-  ): Promise<{
-    specCode: string
-    status: E2eTestStatus
-    passed: boolean
-    heal: { attempt: number; passed: boolean; error: string; durationMs: number }[]
-    repo: { files: number; testIds: number }
-  } | null> => {
+    testId: string,
+    env?: string
+  ): Promise<ImproveTestResult | null> => {
     setLoading(true)
     setError(null)
     try {
       const res = await apiFetch(`/api/e2e/tests/${testId}/improve`, {
         method: "POST",
+        body: JSON.stringify({ env }),
       })
       if (!res.ok) {
-        const body = await res.text()
-        setError(body || `Improve failed (${res.status})`)
+        const bodyText = await res.text()
+        if (res.status === 409) {
+          const body = bodyText ? safeJson(bodyText) : null
+          if (body?.code === "LOGIN_REQUIRED") {
+            return { loginRequired: true, env: body.env ?? null }
+          }
+        }
+        setError(bodyText || `Improve failed (${res.status})`)
         return null
       }
       return await res.json()
@@ -278,5 +319,13 @@ export function useE2eApi() {
     recordTest,
     improveTest,
     deleteTest,
+  }
+}
+
+function safeJson(text: string): any | null {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return null
   }
 }

@@ -5,9 +5,11 @@ import {
   CheckCircle2,
   Circle,
   FileVideo,
+  Globe2,
   Loader2,
   LogIn,
   Plus,
+  Save,
   Sparkles,
   Trash2,
   Upload,
@@ -29,6 +31,7 @@ export default function E2eQa() {
   const {
     listProjects,
     createProject,
+    updateProject,
     generateFromVideo,
     listTests,
     recordLogin,
@@ -57,6 +60,11 @@ export default function E2eQa() {
   const [recordingId, setRecordingId] = useState<string | null>(null)
   const [improvingId, setImprovingId] = useState<string | null>(null)
   const [authing, setAuthing] = useState(false)
+  const [selectedEnv, setSelectedEnv] = useState("")
+  const [envDrafts, setEnvDrafts] = useState<
+    { name: string; baseUrl: string; loginUrl?: string }[]
+  >([{ name: "staging", baseUrl: "", loginUrl: "" }])
+  const [savingEnvs, setSavingEnvs] = useState(false)
 
   useEffect(() => {
     if (!user) {
@@ -73,6 +81,25 @@ export default function E2eQa() {
     setTests(await listTests(p._id))
   }
 
+  useEffect(() => {
+    if (!project) return
+    const envs = project.environments || []
+    setEnvDrafts(
+      envs.length
+        ? envs.map((e) => ({
+            name: e.name,
+            baseUrl: e.baseUrl,
+            loginUrl: e.loginUrl || "",
+          }))
+        : [{ name: "staging", baseUrl: project.baseUrl || "", loginUrl: project.login?.url || "" }]
+    )
+    if (envs.length && !envs.some((e) => e.name === selectedEnv)) {
+      setSelectedEnv(envs[0].name)
+    }
+    if (!envs.length) setSelectedEnv("")
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?._id, project?.updatedAt])
+
   async function handleCreate() {
     if (!newName.trim()) return
     setCreating(true)
@@ -80,6 +107,9 @@ export default function E2eQa() {
     const p = await createProject({
       name: newName.trim(),
       baseUrl: newBaseUrl.trim(),
+      environments: newBaseUrl.trim()
+        ? [{ name: "staging", baseUrl: newBaseUrl.trim() }]
+        : [],
       github: owner && repo ? { owner, repo } : undefined,
     })
     setCreating(false)
@@ -104,32 +134,59 @@ export default function E2eQa() {
   async function handleSetupLogin() {
     if (!project) return
     setAuthing(true)
-    const res = await recordLogin(project._id)
+    const res = await recordLogin(project._id, activeEnvName)
     setAuthing(false)
     if (res) {
       // refresh the selected project so the "login ready" status updates
-      const all = await listProjects()
-      setProjects(all)
-      const fresh = all.find((p) => p._id === project._id)
-      if (fresh) setProject(fresh)
+      await refreshProject(project._id)
     }
   }
 
   async function handleRecord(id: string) {
+    if (!project) return
     setRecordingId(id)
-    const res = await recordTest(id)
+    let res = await recordTest(id, activeEnvName)
+    if (res && "loginRequired" in res) {
+      setRecordingId(null)
+      const label = activeEnvName || "this project"
+      const ok = window.confirm(
+        `You need to capture the login for ${label} first. Open the login recorder now?`
+      )
+      if (!ok) return
+      setAuthing(true)
+      const login = await recordLogin(project._id, activeEnvName)
+      setAuthing(false)
+      if (!login) return
+      await refreshProject(project._id)
+      setRecordingId(id)
+      res = await recordTest(id, activeEnvName)
+    }
     setRecordingId(null)
-    if (res) {
+    if (res && !("loginRequired" in res)) {
       // refresh so the saved spec + new status show up
-      if (project) setTests(await listTests(project._id))
+      setTests(await listTests(project._id))
     }
   }
 
   async function handleImprove(id: string) {
+    if (!project) return
     setImprovingId(id)
-    const res = await improveTest(id)
+    const res = await improveTest(id, activeEnvName)
     setImprovingId(null)
-    if (res && project) setTests(await listTests(project._id))
+    if (res && "loginRequired" in res) {
+      const label = activeEnvName || "this project"
+      const ok = window.confirm(
+        `You need to capture the login for ${label} before improving. Open the login recorder now?`
+      )
+      if (ok) {
+        setAuthing(true)
+        const login = await recordLogin(project._id, activeEnvName)
+        setAuthing(false)
+        if (login) await refreshProject(project._id)
+      }
+      return
+    }
+    if (res) setTests(await listTests(project._id))
   }
 
   async function handleDeleteTest(id: string) {
@@ -138,11 +195,46 @@ export default function E2eQa() {
     }
   }
 
+  async function refreshProject(projectId: string) {
+    const all = await listProjects()
+    setProjects(all)
+    const fresh = all.find((p) => p._id === projectId)
+    if (fresh) setProject(fresh)
+    return fresh
+  }
+
+  async function handleSaveEnvs() {
+    if (!project) return
+    const environments = envDrafts
+      .map((e) => ({
+        name: e.name.trim(),
+        baseUrl: e.baseUrl.trim(),
+        loginUrl: (e.loginUrl || "").trim(),
+      }))
+      .filter((e) => e.name)
+    setSavingEnvs(true)
+    const saved = await updateProject(project._id, { environments })
+    setSavingEnvs(false)
+    if (saved) {
+      setProject(saved)
+      setProjects(await listProjects())
+      if (environments.length && !environments.some((e) => e.name === selectedEnv)) {
+        setSelectedEnv(environments[0].name)
+      }
+    }
+  }
+
   const kindColor: Record<string, string> = {
     smoke: "bg-emerald-100 text-emerald-700",
     regression: "bg-blue-100 text-blue-700",
     bughunt: "bg-amber-100 text-amber-700",
   }
+
+  const envs = project?.environments || []
+  const activeEnvName = envs.length ? selectedEnv || envs[0]?.name || "" : undefined
+  const activeEnv = envs.find((e) => e.name === activeEnvName)
+  const activeBaseUrl = activeEnv?.baseUrl || project?.baseUrl || ""
+  const activeAuthReady = activeEnv ? activeEnv.authReady : !!project?.login?.authReady
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -217,7 +309,9 @@ export default function E2eQa() {
                 >
                   <div className="font-medium">{p.title || p.name}</div>
                   <div className="text-xs text-muted-foreground truncate">
-                    {p.baseUrl || "no base URL set"}
+                    {p.environments?.length
+                      ? `${p.environments.length} environment${p.environments.length > 1 ? "s" : ""}`
+                      : p.baseUrl || "no base URL set"}
                   </div>
                 </button>
               ))}
@@ -236,38 +330,150 @@ export default function E2eQa() {
               {project.title || project.name}
             </h1>
             <p className="text-muted-foreground mb-1">
-              {project.baseUrl || "no base URL set"}
+              {activeBaseUrl || "no base URL set"}
             </p>
             <p className="text-xs text-muted-foreground mb-4">
               {project.github?.owner && project.github?.repo
-                ? `🔗 repo: ${project.github.owner}/${project.github.repo}`
+                ? `repo: ${project.github.owner}/${project.github.repo}`
                 : "no repo connected — improve runs without repo context"}
             </p>
 
-            {/* One-time login capture — every recording/run starts logged in */}
-            <div className="flex items-center gap-3 mb-6">
-              <Button
-                size="sm"
-                variant={project.login?.authReady ? "outline" : "default"}
-                onClick={handleSetupLogin}
-                disabled={authing}
-              >
-                {authing ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" /> Waiting for login…
-                  </>
-                ) : (
-                  <>
-                    <LogIn className="h-4 w-4" />
-                    {project.login?.authReady ? "Re-capture login" : "Set up login"}
-                  </>
-                )}
-              </Button>
-              <span className="text-xs text-muted-foreground">
-                {project.login?.authReady
-                  ? "✓ Logged-in session saved — recordings start authenticated"
-                  : "Capture your login once so tests don't re-record it"}
-              </span>
+            {/* Environments + login setup */}
+            <div className="mb-6 rounded-lg border p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="flex items-center gap-2">
+                  <Globe2 className="h-4 w-4 text-muted-foreground" />
+                  <select
+                    className="rounded-md border bg-background px-3 py-1.5 text-sm"
+                    value={activeEnvName || ""}
+                    onChange={(e) => setSelectedEnv(e.target.value)}
+                    disabled={!envs.length}
+                  >
+                    {envs.length ? (
+                      envs.map((e) => (
+                        <option key={e.name} value={e.name}>
+                          {e.name}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="">default</option>
+                    )}
+                  </select>
+                  <span className="text-xs text-muted-foreground truncate">
+                    {activeBaseUrl || "No URL configured"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant={activeAuthReady ? "outline" : "default"}
+                    onClick={handleSetupLogin}
+                    disabled={authing || !activeBaseUrl}
+                  >
+                    {authing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" /> Waiting for login
+                      </>
+                    ) : (
+                      <>
+                        <LogIn className="h-4 w-4" />
+                        {activeAuthReady ? "Re-capture login" : "Set up login"}
+                      </>
+                    )}
+                  </Button>
+                  <span
+                    className={cn(
+                      "text-xs",
+                      activeAuthReady ? "text-emerald-600" : "text-muted-foreground"
+                    )}
+                  >
+                    {activeAuthReady ? "Session saved" : "Login required before recording"}
+                  </span>
+                </div>
+              </div>
+
+              <details className="mt-4">
+                <summary className="cursor-pointer text-xs text-muted-foreground">
+                  Environment settings
+                </summary>
+                <div className="mt-3 space-y-2">
+                  {envDrafts.map((env, index) => (
+                    <div
+                      key={index}
+                      className="grid gap-2 md:grid-cols-[0.7fr_1.4fr_1.4fr_auto]"
+                    >
+                      <input
+                        className="rounded-md border px-3 py-2 text-sm"
+                        placeholder="staging"
+                        value={env.name}
+                        onChange={(e) =>
+                          setEnvDrafts((items) =>
+                            items.map((item, i) =>
+                              i === index ? { ...item, name: e.target.value } : item
+                            )
+                          )
+                        }
+                      />
+                      <input
+                        className="rounded-md border px-3 py-2 text-sm"
+                        placeholder="https://staging.example.com"
+                        value={env.baseUrl}
+                        onChange={(e) =>
+                          setEnvDrafts((items) =>
+                            items.map((item, i) =>
+                              i === index ? { ...item, baseUrl: e.target.value } : item
+                            )
+                          )
+                        }
+                      />
+                      <input
+                        className="rounded-md border px-3 py-2 text-sm"
+                        placeholder="https://staging.example.com/login"
+                        value={env.loginUrl || ""}
+                        onChange={(e) =>
+                          setEnvDrafts((items) =>
+                            items.map((item, i) =>
+                              i === index ? { ...item, loginUrl: e.target.value } : item
+                            )
+                          )
+                        }
+                      />
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        onClick={() =>
+                          setEnvDrafts((items) => items.filter((_, i) => i !== index))
+                        }
+                        title="Remove environment"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        setEnvDrafts((items) => [
+                          ...items,
+                          { name: "", baseUrl: "", loginUrl: "" },
+                        ])
+                      }
+                    >
+                      <Plus className="h-4 w-4" /> Add environment
+                    </Button>
+                    <Button size="sm" onClick={handleSaveEnvs} disabled={savingEnvs}>
+                      {savingEnvs ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4" />
+                      )}
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              </details>
             </div>
 
             {/* Upload */}
