@@ -22,9 +22,21 @@ export type E2eTestStatus =
   | "committed"
   | "error"
 
+// A feature groups tests inside a project. The video is dropped on a feature.
+export interface E2eFeature {
+  _id: string
+  projectId: string
+  name: string
+  description: string
+  testCount?: number
+  createdAt: string
+  updatedAt: string
+}
+
 export interface E2eTest {
   _id: string
   projectId: string
+  featureId: string | null
   name: string
   source: "video" | "recording"
   kind: E2eTestKind
@@ -34,7 +46,20 @@ export interface E2eTest {
   specCode?: string
   status: E2eTestStatus
   heal?: { attempt: number; passed: boolean; error: string; durationMs: number }[]
+  commit?: E2eCommit
   createdAt: string
+}
+
+export interface E2eCommit {
+  branch: string
+  sha: string
+  url: string
+  committedAt: string
+}
+
+export interface CommitTestResult {
+  status: E2eTestStatus
+  commit: E2eCommit
 }
 
 export interface E2eProjectLogin {
@@ -161,10 +186,46 @@ export function useE2eApi() {
     return res.ok
   }
 
+  // Features (project → feature → tests)
+  const listFeatures = async (projectId: string): Promise<E2eFeature[]> => {
+    setError(null)
+    const res = await apiFetch(`/api/e2e/projects/${projectId}/features`)
+    if (!res.ok) {
+      setError(`Failed to load features (${res.status})`)
+      return []
+    }
+    return (await res.json()) as E2eFeature[]
+  }
+
+  const createFeature = async (
+    projectId: string,
+    payload: { name: string; description?: string }
+  ): Promise<E2eFeature | null> => {
+    setError(null)
+    const res = await apiFetch(`/api/e2e/projects/${projectId}/features`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const body = await res.text()
+      setError(body || `Failed to create feature (${res.status})`)
+      return null
+    }
+    return (await res.json()) as E2eFeature
+  }
+
+  const deleteFeature = async (featureId: string): Promise<boolean> => {
+    const res = await apiFetch(`/api/e2e/features/${featureId}`, {
+      method: "DELETE",
+    })
+    return res.ok
+  }
+
   // Multipart upload — uses raw fetch so the browser sets the multipart
   // boundary itself (apiFetch forces application/json, which would break it).
+  // The video is dropped on a FEATURE; generated cases land under it.
   const generateFromVideo = async (
-    projectId: string,
+    featureId: string,
     file: File
   ): Promise<GenerateFromVideoResult | null> => {
     setLoading(true)
@@ -174,7 +235,7 @@ export function useE2eApi() {
       form.append("video", file)
       const token = getAuthToken()
       const res = await fetch(
-        `${BASE_URL}/api/e2e/projects/${projectId}/from-video`,
+        `${BASE_URL}/api/e2e/features/${featureId}/from-video`,
         {
           method: "POST",
           headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -195,9 +256,10 @@ export function useE2eApi() {
     }
   }
 
-  const listTests = async (projectId: string): Promise<E2eTest[]> => {
+  // Tests of a single feature.
+  const listTests = async (featureId: string): Promise<E2eTest[]> => {
     setError(null)
-    const res = await apiFetch(`/api/e2e/projects/${projectId}/tests`)
+    const res = await apiFetch(`/api/e2e/features/${featureId}/tests`)
     if (!res.ok) {
       setError(`Failed to load tests (${res.status})`)
       return []
@@ -208,6 +270,29 @@ export function useE2eApi() {
   const deleteTest = async (testId: string): Promise<boolean> => {
     const res = await apiFetch(`/api/e2e/tests/${testId}`, { method: "DELETE" })
     return res.ok
+  }
+
+  // Feature 3: commit & push the spec straight to the project's connected repo
+  // (direct to the branch). The commit lands on GitHub immediately.
+  const commitTest = async (testId: string): Promise<CommitTestResult | null> => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await apiFetch(`/api/e2e/tests/${testId}/commit`, {
+        method: "POST",
+      })
+      if (!res.ok) {
+        const body = await res.text()
+        setError(body || `Commit failed (${res.status})`)
+        return null
+      }
+      return (await res.json()) as CommitTestResult
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Commit failed")
+      return null
+    } finally {
+      setLoading(false)
+    }
   }
 
   // Feature 2: capture the login session ONCE. Opens the recorder at the login
@@ -313,11 +398,15 @@ export function useE2eApi() {
     createProject,
     updateProject,
     deleteProject,
+    listFeatures,
+    createFeature,
+    deleteFeature,
     generateFromVideo,
     listTests,
     recordLogin,
     recordTest,
     improveTest,
+    commitTest,
     deleteTest,
   }
 }
