@@ -366,6 +366,24 @@ export function useQaApi() {
     return (await res.json()) as { project: ApiProject; docs: Doc[] }
   }
 
+  // Set (or clear) a custom happy-path body for one endpoint. Pass null/{} to
+  // clear it and fall back to schema-driven generation.
+  const saveDocBody = async (
+    docId: string,
+    exampleBody: unknown
+  ): Promise<Doc | null> => {
+    setError(null)
+    const res = await apiFetch(`/api/qa/docs/${docId}/body`, {
+      method: "PUT",
+      body: JSON.stringify({ exampleBody }),
+    })
+    if (!res.ok) {
+      setError(`Failed to save custom body (${res.status})`)
+      return null
+    }
+    return (await res.json()) as Doc
+  }
+
   const saveProjectAuth = async (
     projectId: string,
     payload: {
@@ -485,6 +503,7 @@ export function useQaApi() {
     syncGithubSpec,
     listProjects,
     getProjectDocs,
+    saveDocBody,
     saveProjectAuth,
     getSectionCollection,
     getBugs,

@@ -39,13 +39,18 @@ import {
   deleteMcpBug,
   deleteMcpDoc,
   generateMcpDocsForTool,
+  generateMcpRegression,
   generateMcpSmoke,
   getMcpProject,
+  getMcpRegression,
   getMcpSmoke,
   listMcpBugs,
   listMcpProjects,
   McpTrialLimitError,
+  refineMcpRegressionCase,
+  refineMcpSmokeCase,
   runMcpQa,
+  runMcpRegression,
   runMcpSmoke,
   updateMcpBugStatus,
   type McpDoc,
@@ -55,7 +60,12 @@ import {
   type McpQaResult,
   type McpQaRunPayload,
   type McpQaRunResponse,
+  type McpRegressionCase,
+  type McpRegressionResult,
+  type McpRegressionRunResponse,
+  type McpRegressionSuite,
   type McpServerConfig,
+  type McpSmokeCase,
   type McpSmokeResult,
   type McpSmokeRunResponse,
   type McpSmokeSuite,
@@ -170,6 +180,9 @@ export default function McpDocs() {
   const routeProjectId = params.projectId ?? null
   const isBugsRoute = Boolean(routeProjectId && location.pathname.endsWith("/bugs"))
   const isSmokeRoute = Boolean(routeProjectId && location.pathname.endsWith("/smoke"))
+  const isRegressionRoute = Boolean(
+    routeProjectId && location.pathname.endsWith("/regression")
+  )
   const [projects, setProjects] = useState<McpProject[]>([])
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
   const [projectName, setProjectName] = useState("montemauro")
@@ -216,6 +229,17 @@ export default function McpDocs() {
   const [smokeLoading, setSmokeLoading] = useState(false)
   const [smokeGenerating, setSmokeGenerating] = useState(false)
   const [smokeRunning, setSmokeRunning] = useState(false)
+  const [refiningSmokeCaseId, setRefiningSmokeCaseId] = useState<string | null>(
+    null
+  )
+  const [regressionSuite, setRegressionSuite] =
+    useState<McpRegressionSuite | null>(null)
+  const [regressionRun, setRegressionRun] =
+    useState<McpRegressionRunResponse | null>(null)
+  const [regressionLoading, setRegressionLoading] = useState(false)
+  const [regressionGenerating, setRegressionGenerating] = useState(false)
+  const [regressionRunning, setRegressionRunning] = useState(false)
+  const [refiningCaseId, setRefiningCaseId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [trialLimits, setTrialLimits] = useState<
@@ -259,6 +283,34 @@ export default function McpDocs() {
       cancelled = true
     }
   }, [isSmokeRoute, routeProjectId])
+
+  useEffect(() => {
+    if (!isRegressionRoute || !routeProjectId) {
+      setRegressionRun(null)
+      return
+    }
+    let cancelled = false
+    setRegressionLoading(true)
+    setError(null)
+    getMcpRegression(routeProjectId)
+      .then((data) => {
+        if (cancelled) return
+        setRegressionSuite(data.suite ?? null)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setError(
+          err instanceof Error ? err.message : "Error loading regression suite"
+        )
+      })
+      .finally(() => {
+        if (cancelled) return
+        setRegressionLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isRegressionRoute, routeProjectId])
 
   const docCount = useMemo(() => docs.length, [docs])
 
@@ -646,6 +698,83 @@ export default function McpDocs() {
     }
   }
 
+  async function handleRefineSmokeCase(caseId: string, instruction: string) {
+    if (!routeProjectId || !caseId) return
+    setError(null)
+    setSuccess(null)
+    setRefiningSmokeCaseId(caseId)
+    try {
+      const data = await refineMcpSmokeCase(routeProjectId, caseId, instruction)
+      setSmokeSuite(data.suite ?? null)
+      setSuccess("Case updated by AI.")
+    } catch (err) {
+      handleError(err, "Error refining case")
+    } finally {
+      setRefiningSmokeCaseId(null)
+    }
+  }
+
+  async function handleGenerateRegression() {
+    if (!routeProjectId) return
+    setError(null)
+    setSuccess(null)
+    setRegressionGenerating(true)
+    try {
+      const data = await generateMcpRegression(routeProjectId, {})
+      setRegressionSuite(data.suite ?? null)
+      setRegressionRun(null)
+      setSuccess(
+        `Regression suite generated with ${data.suite?.cases?.length ?? 0} case${
+          (data.suite?.cases?.length ?? 0) === 1 ? "" : "s"
+        }`
+      )
+    } catch (err) {
+      handleError(err, "Error generating regression suite")
+    } finally {
+      setRegressionGenerating(false)
+    }
+  }
+
+  async function handleRunRegression() {
+    if (!routeProjectId) return
+    setError(null)
+    setSuccess(null)
+    setRegressionRunning(true)
+    try {
+      const data = await runMcpRegression(routeProjectId)
+      setRegressionRun(data)
+      setSuccess(
+        `Regression run: ${data.summary.ok}/${data.summary.total} ok, ${data.summary.regression} regression${
+          data.summary.regression === 1 ? "" : "s"
+        }`
+      )
+    } catch (err) {
+      handleError(err, "Error running regression suite")
+    } finally {
+      setRegressionRunning(false)
+    }
+  }
+
+  async function handleRefineCase(caseId: string, instruction: string) {
+    if (!routeProjectId || !caseId) return
+    setError(null)
+    setSuccess(null)
+    setRefiningCaseId(caseId)
+    try {
+      const data = await refineMcpRegressionCase(
+        routeProjectId,
+        caseId,
+        instruction
+      )
+      setRegressionSuite(data.suite ?? null)
+      setSuccess("Case updated by AI.")
+    } catch (err) {
+      handleError(err, "Error refining case")
+    } finally {
+      setRefiningCaseId(null)
+    }
+  }
+
   async function handleBugStatus(id: string, status: string) {
     setError(null)
     try {
@@ -786,10 +915,10 @@ export default function McpDocs() {
         <div
           className={cn(
             "grid grid-cols-1 gap-4 items-start",
-            !isSmokeRoute && !isBugsRoute && "xl:grid-cols-[minmax(320px,420px)_1fr]"
+            !isSmokeRoute && !isBugsRoute && !isRegressionRoute && "xl:grid-cols-[minmax(320px,420px)_1fr]"
           )}
         >
-          {!isSmokeRoute && !isBugsRoute && (
+          {!isSmokeRoute && !isBugsRoute && !isRegressionRoute && (
           <Card className="bg-white/[0.03] border-white/10 text-white">
             <CardHeader>
               <div className="flex items-center gap-2">
@@ -990,6 +1119,12 @@ export default function McpDocs() {
                     Smoke
                   </Link>
                   <Link
+                    to={`/mcp-docs/${activeProjectId}/regression`}
+                    className="text-xs text-blue-300 hover:text-blue-200"
+                  >
+                    Regression
+                  </Link>
+                  <Link
                     to={`/mcp-docs/${activeProjectId}/bugs`}
                     className="text-xs text-blue-300 hover:text-blue-200"
                   >
@@ -1011,7 +1146,7 @@ export default function McpDocs() {
               </div>
             )}
 
-            {!refreshing && !projectLoading && !isBugsRoute && !isSmokeRoute && docs.length === 0 && tools.length === 0 && (
+            {!refreshing && !projectLoading && !isBugsRoute && !isSmokeRoute && !isRegressionRoute && docs.length === 0 && tools.length === 0 && (
               <EmptyState onGenerateFocus={() => window.scrollTo({ top: 0, behavior: "smooth" })} />
             )}
 
@@ -1031,14 +1166,32 @@ export default function McpDocs() {
                 loading={smokeLoading}
                 generating={smokeGenerating}
                 running={smokeRunning}
+                refiningCaseId={refiningSmokeCaseId}
                 generateLimited={Boolean(trialLimits.smoke_generate)}
                 runLimited={Boolean(trialLimits.smoke_run)}
                 onGenerate={handleGenerateSmoke}
                 onRun={handleRunSmoke}
+                onRefineCase={handleRefineSmokeCase}
               />
             )}
 
-            {!projectLoading && !isBugsRoute && !isSmokeRoute && tools.length > 0 && (
+            {!projectLoading && isRegressionRoute && (
+              <RegressionSuitePanel
+                suite={regressionSuite}
+                run={regressionRun}
+                loading={regressionLoading}
+                generating={regressionGenerating}
+                running={regressionRunning}
+                refiningCaseId={refiningCaseId}
+                generateLimited={Boolean(trialLimits.regression_generate)}
+                runLimited={Boolean(trialLimits.regression_run)}
+                onGenerate={handleGenerateRegression}
+                onRun={handleRunRegression}
+                onRefineCase={handleRefineCase}
+              />
+            )}
+
+            {!projectLoading && !isBugsRoute && !isSmokeRoute && !isRegressionRoute && tools.length > 0 && (
               <div className="space-y-2">
                 {tools.map((tool) => {
                   const toolName = getToolName(tool)
@@ -1273,20 +1426,24 @@ function SmokeSuitePanel({
   loading,
   generating,
   running,
+  refiningCaseId,
   generateLimited,
   runLimited,
   onGenerate,
   onRun,
+  onRefineCase,
 }: {
   suite: McpSmokeSuite | null
   run: McpSmokeRunResponse | null
   loading: boolean
   generating: boolean
   running: boolean
+  refiningCaseId: string | null
   generateLimited: boolean
   runLimited: boolean
   onGenerate: () => void
   onRun: () => void
+  onRefineCase: (caseId: string, instruction: string) => void
 }) {
   if (loading && !suite) {
     return (
@@ -1416,40 +1573,12 @@ function SmokeSuitePanel({
           ) : (
             <div className="space-y-2">
               {cases.map((c, index) => (
-                <div
-                  key={`${c.name}-${index}`}
-                  className="rounded-lg border border-white/10 bg-white/[0.02] p-3"
-                >
-                  <div className="flex items-start justify-between gap-3 flex-wrap">
-                    <p className="text-sm font-medium text-white truncate">
-                      {c.name}
-                    </p>
-                    <span className="rounded border border-blue-500/25 bg-blue-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-blue-200 font-mono">
-                      {c.expectedTool}
-                    </span>
-                  </div>
-                  {c.expectedArgs && Object.keys(c.expectedArgs).length > 0 ? (
-                    <div className="mt-2">
-                      <h5 className="text-[10px] text-white/40 uppercase tracking-wider mb-1">
-                        Expected args
-                      </h5>
-                      <pre className="overflow-x-auto rounded-md border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/65">
-                        {JSON.stringify(c.expectedArgs, null, 2)}
-                      </pre>
-                    </div>
-                  ) : (
-                    <p className="mt-2 text-[11px] text-white/35 italic">
-                      No args
-                    </p>
-                  )}
-                  {c.assertions && c.assertions.length > 0 && (
-                    <ul className="mt-2 space-y-0.5 text-[11px] text-white/55 list-disc list-inside">
-                      {c.assertions.map((a, i) => (
-                        <li key={i}>{a}</li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
+                <SmokeCaseCard
+                  key={c._id ?? `${c.name}-${index}`}
+                  testCase={c}
+                  refining={refiningCaseId === c._id}
+                  onRefine={onRefineCase}
+                />
               ))}
             </div>
           )}
@@ -1472,6 +1601,93 @@ function SmokeSuitePanel({
         </div>
       )}
     </section>
+  )
+}
+
+// One editable smoke case in the preview: shows args/assertions and a small
+// input to ask the AI to change it. Mirrors RegressionCaseCard.
+function SmokeCaseCard({
+  testCase,
+  refining,
+  onRefine,
+}: {
+  testCase: McpSmokeCase
+  refining: boolean
+  onRefine: (caseId: string, instruction: string) => void
+}) {
+  const [instruction, setInstruction] = useState("")
+  const canRefine = Boolean(testCase._id)
+
+  function submit() {
+    if (!testCase._id || !instruction.trim() || refining) return
+    onRefine(testCase._id, instruction.trim())
+    setInstruction("")
+  }
+
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <p className="text-sm font-medium text-white truncate">{testCase.name}</p>
+        <span className="rounded border border-blue-500/25 bg-blue-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-blue-200 font-mono">
+          {testCase.expectedTool}
+        </span>
+      </div>
+
+      {testCase.expectedArgs &&
+      Object.keys(testCase.expectedArgs).length > 0 ? (
+        <div className="mt-2">
+          <h5 className="text-[10px] text-white/40 uppercase tracking-wider mb-1">
+            Expected args
+          </h5>
+          <pre className="overflow-x-auto rounded-md border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/65">
+            {JSON.stringify(testCase.expectedArgs, null, 2)}
+          </pre>
+        </div>
+      ) : (
+        <p className="mt-2 text-[11px] text-white/35 italic">No args</p>
+      )}
+
+      {testCase.assertions && testCase.assertions.length > 0 && (
+        <ul className="mt-2 space-y-0.5 text-[11px] text-white/55 list-disc list-inside">
+          {testCase.assertions.map((a, i) => (
+            <li key={i}>{a}</li>
+          ))}
+        </ul>
+      )}
+
+      {canRefine && (
+        <div className="mt-3 flex items-center gap-2">
+          <Input
+            value={instruction}
+            onChange={(e) => setInstruction(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault()
+                submit()
+              }
+            }}
+            disabled={refining}
+            placeholder="Tell the AI how to change this test…"
+            className={cn(fieldClass, "h-8 text-xs")}
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={submit}
+            disabled={refining || !instruction.trim()}
+            className="h-8 border-white/20 text-white/80 hover:text-white hover:bg-white/10 hover:border-white/30 gap-1.5 shrink-0"
+          >
+            {refining ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <WandSparkles className="h-3.5 w-3.5" />
+            )}
+            Ask AI
+          </Button>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -1545,6 +1761,411 @@ function SmokeResultCard({ result }: { result: McpSmokeResult }) {
             </ul>
           </div>
         )}
+      </div>
+    </details>
+  )
+}
+
+function RegressionSuitePanel({
+  suite,
+  run,
+  loading,
+  generating,
+  running,
+  refiningCaseId,
+  generateLimited,
+  runLimited,
+  onGenerate,
+  onRun,
+  onRefineCase,
+}: {
+  suite: McpRegressionSuite | null
+  run: McpRegressionRunResponse | null
+  loading: boolean
+  generating: boolean
+  running: boolean
+  refiningCaseId: string | null
+  generateLimited: boolean
+  runLimited: boolean
+  onGenerate: () => void
+  onRun: () => void
+  onRefineCase: (caseId: string, instruction: string) => void
+}) {
+  if (loading && !suite) {
+    return (
+      <div className="flex items-center justify-center py-24 rounded-xl border border-white/10 bg-white/[0.03]">
+        <Loader2 className="h-6 w-6 animate-spin text-white/30" />
+      </div>
+    )
+  }
+
+  const cases = suite?.cases ?? []
+  const results = run?.results ?? []
+  const summary = run?.summary
+
+  return (
+    <section
+      id="regression-suite"
+      className="rounded-xl border border-white/10 bg-white/[0.03] p-5 scroll-mt-6 space-y-4"
+    >
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-emerald-300" />
+            <h3 className="text-sm font-medium text-white">Regression suite</h3>
+          </div>
+          <p className="text-xs text-white/40 mt-0.5">
+            {suite
+              ? `${cases.length} case${cases.length !== 1 ? "s" : ""} across your tools`
+              : "No suite generated yet."}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {suite ? (
+            <>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={onGenerate}
+                disabled={generating || running || generateLimited}
+                className="h-8 border-white/20 text-white/80 hover:text-white hover:bg-white/10 hover:border-white/30 gap-1.5"
+              >
+                {generating ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+                Regenerate
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={onRun}
+                disabled={running || generating || runLimited}
+                className="h-8 bg-blue-600 hover:bg-blue-500 text-white gap-1.5"
+              >
+                {running ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Play className="h-3.5 w-3.5" />
+                )}
+                Run regression
+              </Button>
+            </>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              onClick={onGenerate}
+              disabled={generating || generateLimited}
+              className="h-8 bg-blue-600 hover:bg-blue-500 text-white gap-1.5"
+            >
+              {generating ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <WandSparkles className="h-3.5 w-3.5" />
+              )}
+              Create regression
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {summary && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="rounded-md border border-white/15 bg-white/5 px-2 py-1 text-xs text-white/70 font-mono">
+            {summary.ok}/{summary.total} ok
+          </span>
+          <span
+            className={cn(
+              "rounded-md border px-2 py-1 text-xs font-mono",
+              summary.regression > 0
+                ? "border-red-500/30 bg-red-500/10 text-red-300"
+                : "border-green-500/30 bg-green-500/10 text-green-300"
+            )}
+          >
+            {summary.regression} regression{summary.regression !== 1 ? "s" : ""}
+          </span>
+          {summary.warn > 0 && (
+            <span className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs font-mono text-amber-300">
+              {summary.warn} warn
+            </span>
+          )}
+        </div>
+      )}
+
+      {!suite && !loading && (
+        <div className="rounded-lg border border-white/10 bg-white/[0.02] px-4 py-6 text-center">
+          <p className="text-sm text-white/60">
+            No regression suite for this project yet.
+          </p>
+          <p className="text-xs text-white/40 mt-1">
+            Click <span className="text-white/70">Create regression</span> to
+            generate one — the AI writes several cases per tool.
+          </p>
+        </div>
+      )}
+
+      {suite && results.length === 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h4 className="text-[10px] text-white/45 uppercase tracking-wider">
+              Preview · {cases.length} case{cases.length !== 1 ? "s" : ""}
+            </h4>
+            <span className="text-[11px] text-white/35">
+              Run regression to execute
+            </span>
+          </div>
+          {cases.length === 0 ? (
+            <p className="text-sm text-white/40 rounded-md border border-white/10 bg-white/[0.02] px-3 py-6 text-center">
+              Suite has no cases.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {cases.map((c, index) => (
+                <RegressionCaseCard
+                  key={c._id ?? `${c.name}-${index}`}
+                  testCase={c}
+                  refining={refiningCaseId === c._id}
+                  onRefine={onRefineCase}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {suite && results.length > 0 && (
+        <div className="space-y-2">
+          <h4 className="text-[10px] text-white/45 uppercase tracking-wider">
+            Results · {results.length}
+          </h4>
+          <div className="space-y-2">
+            {results.map((result, index) => (
+              <RegressionResultCard
+                key={`${result.caseName}-${index}`}
+                result={result}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
+
+// One editable case in the preview: shows what it covers, its args/assertions,
+// and a small input to ask the AI to change it.
+function RegressionCaseCard({
+  testCase,
+  refining,
+  onRefine,
+}: {
+  testCase: McpRegressionCase
+  refining: boolean
+  onRefine: (caseId: string, instruction: string) => void
+}) {
+  const [instruction, setInstruction] = useState("")
+  const canRefine = Boolean(testCase._id)
+
+  function submit() {
+    if (!testCase._id || !instruction.trim() || refining) return
+    onRefine(testCase._id, instruction.trim())
+    setInstruction("")
+  }
+
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <p className="text-sm font-medium text-white truncate">{testCase.name}</p>
+        <span className="rounded border border-blue-500/25 bg-blue-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-blue-200 font-mono">
+          {testCase.expectedTool}
+        </span>
+      </div>
+
+      {testCase.covers && (
+        <div className="mt-2 flex items-start gap-1.5">
+          <span className="text-[10px] text-emerald-300/80 uppercase tracking-wider mt-0.5 shrink-0">
+            Covers
+          </span>
+          <p className="text-xs text-white/70 leading-relaxed">
+            {testCase.covers}
+          </p>
+        </div>
+      )}
+
+      {testCase.expectedArgs &&
+      Object.keys(testCase.expectedArgs).length > 0 ? (
+        <div className="mt-2">
+          <h5 className="text-[10px] text-white/40 uppercase tracking-wider mb-1">
+            Args
+          </h5>
+          <pre className="overflow-x-auto rounded-md border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/65">
+            {JSON.stringify(testCase.expectedArgs, null, 2)}
+          </pre>
+        </div>
+      ) : null}
+
+      {testCase.assertions && testCase.assertions.length > 0 && (
+        <ul className="mt-2 space-y-0.5 text-[11px] text-white/55 list-disc list-inside">
+          {testCase.assertions.map((a, i) => (
+            <li key={i}>{a}</li>
+          ))}
+        </ul>
+      )}
+
+      {canRefine && (
+        <div className="mt-3 flex items-center gap-2">
+          <Input
+            value={instruction}
+            onChange={(e) => setInstruction(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault()
+                submit()
+              }
+            }}
+            disabled={refining}
+            placeholder="Tell the AI how to change this test…"
+            className={cn(fieldClass, "h-8 text-xs")}
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={submit}
+            disabled={refining || !instruction.trim()}
+            className="h-8 border-white/20 text-white/80 hover:text-white hover:bg-white/10 hover:border-white/30 gap-1.5 shrink-0"
+          >
+            {refining ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <WandSparkles className="h-3.5 w-3.5" />
+            )}
+            Ask AI
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RegressionResultCard({ result }: { result: McpRegressionResult }) {
+  const isOk = result.status === "ok"
+  const isWarn = result.status === "warn"
+  const accent = isOk
+    ? "border-green-500/20"
+    : isWarn
+      ? "border-amber-500/25"
+      : "border-red-500/25"
+  const statusPill = cn(
+    "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-mono uppercase tracking-wider",
+    isOk
+      ? "bg-green-500/10 text-green-300"
+      : isWarn
+        ? "bg-amber-500/10 text-amber-300"
+        : "bg-red-500/10 text-red-300"
+  )
+
+  return (
+    <details
+      className={cn("group rounded-lg border bg-white/[0.02]", accent)}
+      open={!isOk}
+    >
+      <summary className="cursor-pointer list-none px-4 py-3 hover:bg-white/[0.03] transition-colors">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              {isOk ? (
+                <CheckCircle2 className="h-4 w-4 text-green-400 shrink-0" />
+              ) : isWarn ? (
+                <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
+              ) : (
+                <XCircle className="h-4 w-4 text-red-400 shrink-0" />
+              )}
+              <p className="text-sm font-medium text-white truncate">
+                {result.caseName}
+              </p>
+            </div>
+            {result.covers && (
+              <p className="mt-1 text-[11px] text-white/50 leading-relaxed">
+                {result.covers}
+              </p>
+            )}
+            <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+              {result.toolName && (
+                <span className="text-[11px] text-white/45 font-mono truncate">
+                  {result.toolName}
+                </span>
+              )}
+              {typeof result.latencyMs === "number" && (
+                <span className="text-[11px] text-white/40 font-mono">
+                  {result.latencyMs}ms
+                </span>
+              )}
+            </div>
+          </div>
+          <span className={statusPill}>{result.status}</span>
+        </div>
+      </summary>
+
+      <div className="px-4 pb-4 pt-2 space-y-3 border-t border-white/5">
+        {result.error && (
+          <div className="rounded-md border border-red-500/25 bg-red-500/10 px-3 py-2">
+            <h5 className="text-[10px] text-red-300/80 uppercase tracking-wider mb-1">
+              Error
+            </h5>
+            <p className="text-sm text-red-200 leading-relaxed">
+              {result.error}
+            </p>
+          </div>
+        )}
+
+        {result.reasoning && (
+          <div className="rounded-md border border-white/10 bg-white/[0.02] px-3 py-2">
+            <h5 className="text-[10px] text-white/45 uppercase tracking-wider mb-1">
+              Judge
+            </h5>
+            <p className="text-xs text-white/65 leading-relaxed">
+              {result.reasoning}
+            </p>
+          </div>
+        )}
+
+        {result.assertionResults && result.assertionResults.length > 0 && (
+          <div>
+            <h5 className="text-[10px] text-white/45 uppercase tracking-wider mb-1.5">
+              Assertions
+            </h5>
+            <ul className="space-y-1">
+              {result.assertionResults.map((a, i) => (
+                <li key={i} className="flex items-start gap-2 text-xs">
+                  {a.ok ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-400 shrink-0 mt-0.5" />
+                  ) : (
+                    <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0 mt-0.5" />
+                  )}
+                  <span className="text-white/70 leading-relaxed">
+                    {a.assertion}
+                    {a.note ? (
+                      <span className="text-white/40"> — {a.note}</span>
+                    ) : null}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <CodePanel title="Args" value={result.args ?? {}} empty="No args" />
+          <CodePanel
+            title="Response"
+            value={result.response}
+            empty="No response"
+          />
+        </div>
       </div>
     </details>
   )

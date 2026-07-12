@@ -15,10 +15,16 @@ export default [
   route("mcp-docs/:projectId", "routes/mcp-docs.$projectId.tsx"),
   route("mcp-docs/:projectId/bugs", "routes/mcp-docs.$projectId.bugs.tsx"),
   route("mcp-docs/:projectId/smoke", "routes/mcp-docs.$projectId.smoke.tsx"),
+  route(
+    "mcp-docs/:projectId/regression",
+    "routes/mcp-docs.$projectId.regression.tsx"
+  ),
   route("privacy", "routes/privacy.tsx"),
   route("docs", "routes/docs.tsx"),
   route("docs/:owner/:repo", "routes/docs.$owner.$repo.tsx"),
   route("swagger-qa", "routes/swagger-qa.tsx"),
   route("e2e-qa", "routes/e2e-qa.tsx"),
+  route("academy", "routes/academy.tsx"),
+  route("academy/:courseId", "routes/academy.$courseId.tsx"),
   route("*", "routes/catch-all.tsx"),
 ] satisfies RouteConfig

@@ -214,17 +214,17 @@ export default function Home() {
             <div className="max-w-3xl">
               <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-xs font-medium text-cyan-100">
                 <Zap className="h-3.5 w-3.5" />
-                Three automation workspaces. One product.
+                MCP documentation & QA, automated
               </div>
 
               <h1 className="text-4xl font-semibold leading-[1.02] tracking-tight text-white sm:text-5xl md:text-6xl">
-                Olivia Tool documents and tests your APIs, MCP servers, and end-to-end flows.
+                Document and test your MCP server automatically.
               </h1>
 
               <p className="mt-5 max-w-2xl text-base leading-7 text-white/[0.66] md:text-lg">
-                Run a flow once and Olivia turns it into a Playwright test, commits it to your
-                repo, and heals it when the app changes. Plus API automation for endpoint docs
-                and QA, and MCP automation for tool docs, smoke suites, and bug reports.
+                Connect your MCP server and Olivia discovers every tool, writes the docs, runs
+                smoke tests with real arguments, and reports bugs with evidence — in minutes,
+                not sprints.
               </p>
 
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">

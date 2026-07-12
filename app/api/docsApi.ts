@@ -23,6 +23,8 @@ export interface Doc {
   requestBody: DocParam[]
   queryParams: DocParam[]
   responses: DocResponse[]
+  // Optional user-provided body the QA generator uses as the happy-path base.
+  exampleBody?: unknown
   source?: string
   prNumber?: number
   sourceFile?: string

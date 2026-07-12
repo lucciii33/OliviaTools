@@ -93,6 +93,7 @@ export interface McpQaRunPayload {
 }
 
 export interface McpSmokeCase {
+  _id?: string
   name: string
   expectedTool: string
   expectedArgs?: Record<string, unknown>
@@ -129,6 +130,69 @@ export interface McpSmokeRunResponse {
 export interface McpSmokeGenerateResponse {
   suite: McpSmokeSuite
   generatedBy?: { provider?: string; model?: string }
+}
+
+export interface McpSmokeRefineResponse {
+  suite: McpSmokeSuite
+  case: McpSmokeCase
+}
+
+// ---------- Regression suite ----------
+
+export interface McpRegressionCase {
+  _id?: string
+  name: string
+  expectedTool: string
+  expectedArgs?: Record<string, unknown>
+  covers?: string
+  assertions?: string[]
+}
+
+export interface McpRegressionSuite {
+  _id: string
+  projectId?: string
+  kind?: string
+  name?: string
+  cases: McpRegressionCase[]
+  generatedBy?: { provider?: string; model?: string }
+}
+
+export interface McpRegressionAssertionResult {
+  assertion: string
+  ok: boolean
+  note?: string
+}
+
+export interface McpRegressionResult {
+  caseName: string
+  toolName: string
+  status: "ok" | "regression" | "warn" | string
+  verdict?: "pass" | "fail" | "warn"
+  covers?: string | null
+  assertions?: string[]
+  assertionResults?: McpRegressionAssertionResult[]
+  reasoning?: string | null
+  latencyMs?: number
+  error?: string | null
+  args?: Record<string, unknown>
+  response?: unknown
+}
+
+export interface McpRegressionRunResponse {
+  suiteId: string
+  projectId: string
+  summary: { total: number; ok: number; regression: number; warn: number }
+  results: McpRegressionResult[]
+}
+
+export interface McpRegressionGenerateResponse {
+  suite: McpRegressionSuite
+  generatedBy?: { provider?: string; model?: string }
+}
+
+export interface McpRegressionRefineResponse {
+  suite: McpRegressionSuite
+  case: McpRegressionCase
 }
 
 export interface McpQaBug {
@@ -261,6 +325,8 @@ export type McpTrialLimitAction =
   | "qa_run"
   | "smoke_generate"
   | "smoke_run"
+  | "regression_generate"
+  | "regression_run"
 
 export class McpTrialLimitError extends Error {
   action?: McpTrialLimitAction | string
@@ -390,6 +456,68 @@ export async function runMcpSmoke(projectId: string) {
     }
   )
   return readJson<McpSmokeRunResponse>(res)
+}
+
+export async function refineMcpSmokeCase(
+  projectId: string,
+  caseId: string,
+  instruction: string
+) {
+  const res = await apiFetch(
+    `/api/mcp-lab/projects/${projectId}/smoke/cases/${caseId}/refine`,
+    {
+      method: "POST",
+      body: JSON.stringify({ instruction }),
+    }
+  )
+  return readJson<McpSmokeRefineResponse>(res)
+}
+
+export async function getMcpRegression(projectId: string) {
+  const res = await apiFetch(`/api/mcp-lab/projects/${projectId}/regression`, {
+    cache: "no-store",
+  })
+  return readJson<{ suite: McpRegressionSuite | null }>(res)
+}
+
+export async function generateMcpRegression(
+  projectId: string,
+  payload: { provider?: "anthropic" | "openai"; model?: string } = {}
+) {
+  const res = await apiFetch(
+    `/api/mcp-lab/projects/${projectId}/regression/generate`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  )
+  return readJson<McpRegressionGenerateResponse>(res)
+}
+
+export async function runMcpRegression(projectId: string) {
+  const res = await apiFetch(
+    `/api/mcp-lab/projects/${projectId}/regression/run`,
+    {
+      method: "POST",
+      body: JSON.stringify({}),
+    }
+  )
+  return readJson<McpRegressionRunResponse>(res)
+}
+
+export async function refineMcpRegressionCase(
+  projectId: string,
+  caseId: string,
+  instruction: string
+) {
+  const res = await apiFetch(
+    `/api/mcp-lab/projects/${projectId}/regression/cases/${caseId}/refine`,
+    {
+      method: "POST",
+      body: JSON.stringify({ instruction }),
+    }
+  )
+  return readJson<McpRegressionRefineResponse>(res)
 }
 
 export async function listMcpBugs(projectId: string) {
