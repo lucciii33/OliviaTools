@@ -19,6 +19,7 @@ export default [
     "mcp-docs/:projectId/regression",
     "routes/mcp-docs.$projectId.regression.tsx"
   ),
+  route("mcp-docs/:projectId/load", "routes/mcp-docs.$projectId.load.tsx"),
   route("privacy", "routes/privacy.tsx"),
   route("docs", "routes/docs.tsx"),
   route("docs/:owner/:repo", "routes/docs.$owner.$repo.tsx"),

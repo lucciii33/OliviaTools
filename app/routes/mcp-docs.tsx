@@ -14,6 +14,7 @@ import {
   ChevronUp,
   CheckCircle2,
   Flame,
+  Gauge,
   Loader2,
   Play,
   RefreshCw,
@@ -22,6 +23,7 @@ import {
   Trash2,
   WandSparkles,
   XCircle,
+  Zap,
 } from "lucide-react"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card"
@@ -49,11 +51,15 @@ import {
   McpTrialLimitError,
   refineMcpRegressionCase,
   refineMcpSmokeCase,
+  runMcpLoad,
   runMcpQa,
   runMcpRegression,
   runMcpSmoke,
   updateMcpBugStatus,
   type McpDoc,
+  type McpLoadRunResponse,
+  type McpLoadTestType,
+  type McpLoadToolSpec,
   type McpProject,
   type McpProjectBug,
   type McpQaBug,
@@ -183,6 +189,9 @@ export default function McpDocs() {
   const isRegressionRoute = Boolean(
     routeProjectId && location.pathname.endsWith("/regression")
   )
+  const isLoadRoute = Boolean(
+    routeProjectId && location.pathname.endsWith("/load")
+  )
   const [projects, setProjects] = useState<McpProject[]>([])
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
   const [projectName, setProjectName] = useState("montemauro")
@@ -240,6 +249,8 @@ export default function McpDocs() {
   const [regressionGenerating, setRegressionGenerating] = useState(false)
   const [regressionRunning, setRegressionRunning] = useState(false)
   const [refiningCaseId, setRefiningCaseId] = useState<string | null>(null)
+  const [loadRun, setLoadRun] = useState<McpLoadRunResponse | null>(null)
+  const [loadRunning, setLoadRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [trialLimits, setTrialLimits] = useState<
@@ -775,6 +786,30 @@ export default function McpDocs() {
     }
   }
 
+  async function handleRunLoad(payload: Parameters<typeof runMcpLoad>[1]) {
+    if (!routeProjectId) return
+    setError(null)
+    setSuccess(null)
+    setLoadRunning(true)
+    try {
+      const data = await runMcpLoad(routeProjectId, payload)
+      setLoadRun(data)
+      const verdictMsg =
+        data.verdict === "pass"
+          ? "all thresholds passed"
+          : data.verdict === "fail"
+            ? "thresholds failed"
+            : "no thresholds set"
+      setSuccess(
+        `Load test done: ${data.summary.totalRequests} calls at ${data.summary.throughputRps} req/s — ${verdictMsg}.`
+      )
+    } catch (err) {
+      handleError(err, "Error running load test")
+    } finally {
+      setLoadRunning(false)
+    }
+  }
+
   async function handleBugStatus(id: string, status: string) {
     setError(null)
     try {
@@ -915,10 +950,10 @@ export default function McpDocs() {
         <div
           className={cn(
             "grid grid-cols-1 gap-4 items-start",
-            !isSmokeRoute && !isBugsRoute && !isRegressionRoute && "xl:grid-cols-[minmax(320px,420px)_1fr]"
+            !isSmokeRoute && !isBugsRoute && !isRegressionRoute && !isLoadRoute && "xl:grid-cols-[minmax(320px,420px)_1fr]"
           )}
         >
-          {!isSmokeRoute && !isBugsRoute && !isRegressionRoute && (
+          {!isSmokeRoute && !isBugsRoute && !isRegressionRoute && !isLoadRoute && (
           <Card className="bg-white/[0.03] border-white/10 text-white">
             <CardHeader>
               <div className="flex items-center gap-2">
@@ -1125,6 +1160,12 @@ export default function McpDocs() {
                     Regression
                   </Link>
                   <Link
+                    to={`/mcp-docs/${activeProjectId}/load`}
+                    className="text-xs text-blue-300 hover:text-blue-200"
+                  >
+                    Load
+                  </Link>
+                  <Link
                     to={`/mcp-docs/${activeProjectId}/bugs`}
                     className="text-xs text-blue-300 hover:text-blue-200"
                   >
@@ -1146,7 +1187,7 @@ export default function McpDocs() {
               </div>
             )}
 
-            {!refreshing && !projectLoading && !isBugsRoute && !isSmokeRoute && !isRegressionRoute && docs.length === 0 && tools.length === 0 && (
+            {!refreshing && !projectLoading && !isBugsRoute && !isSmokeRoute && !isRegressionRoute && !isLoadRoute && docs.length === 0 && tools.length === 0 && (
               <EmptyState onGenerateFocus={() => window.scrollTo({ top: 0, behavior: "smooth" })} />
             )}
 
@@ -1191,7 +1232,17 @@ export default function McpDocs() {
               />
             )}
 
-            {!projectLoading && !isBugsRoute && !isSmokeRoute && !isRegressionRoute && tools.length > 0 && (
+            {!projectLoading && isLoadRoute && (
+              <LoadTestPanel
+                tools={tools}
+                run={loadRun}
+                running={loadRunning}
+                runLimited={Boolean(trialLimits.load_run)}
+                onRun={handleRunLoad}
+              />
+            )}
+
+            {!projectLoading && !isBugsRoute && !isSmokeRoute && !isRegressionRoute && !isLoadRoute && tools.length > 0 && (
               <div className="space-y-2">
                 {tools.map((tool) => {
                   const toolName = getToolName(tool)
@@ -2548,6 +2599,687 @@ function McpDocCard({
         </div>
       )}
     </article>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Load / stress tester ("k6 for MCP") — config + results
+// ---------------------------------------------------------------------------
+
+const LOAD_TEST_TYPES: {
+  id: McpLoadTestType
+  label: string
+  hint: string
+}[] = [
+  { id: "load", label: "Load", hint: "Steady VUs — baseline capacity" },
+  { id: "stress", label: "Stress", hint: "Ramp past peak — find the breaking point" },
+  { id: "spike", label: "Spike", hint: "Sudden surge — resilience to bursts" },
+  { id: "soak", label: "Soak", hint: "Hold for long — leaks & slow decay" },
+]
+
+type LoadToolConfig = { selected: boolean; weight: number }
+
+function LoadTestPanel({
+  tools,
+  run,
+  running,
+  runLimited,
+  onRun,
+}: {
+  tools: McpTool[]
+  run: McpLoadRunResponse | null
+  running: boolean
+  runLimited: boolean
+  onRun: (payload: {
+    testType: McpLoadTestType
+    vus: number
+    durationSec: number
+    tools: McpLoadToolSpec[]
+    thresholds: {
+      p95Ms?: number
+      errorRatePct?: number
+      minThroughputRps?: number
+    }
+  }) => void
+}) {
+  const toolNames = useMemo(
+    () => tools.map((t) => getToolName(t)).filter(Boolean),
+    [tools]
+  )
+  const [testType, setTestType] = useState<McpLoadTestType>("load")
+  const [vus, setVus] = useState(10)
+  const [durationSec, setDurationSec] = useState(30)
+  const [toolCfg, setToolCfg] = useState<Record<string, LoadToolConfig>>({})
+  const [p95Ms, setP95Ms] = useState("")
+  const [errorRatePct, setErrorRatePct] = useState("")
+  const [minThroughputRps, setMinThroughputRps] = useState("")
+
+  // Default: every tool selected, equal weight.
+  useEffect(() => {
+    setToolCfg((prev) => {
+      const next: Record<string, LoadToolConfig> = {}
+      for (const name of toolNames) {
+        next[name] = prev[name] ?? { selected: true, weight: 1 }
+      }
+      return next
+    })
+  }, [toolNames])
+
+  const selectedTools = toolNames.filter((n) => toolCfg[n]?.selected)
+  const activeType = LOAD_TEST_TYPES.find((t) => t.id === testType)
+
+  function toggleTool(name: string) {
+    setToolCfg((p) => ({
+      ...p,
+      [name]: { ...(p[name] ?? { weight: 1 }), selected: !p[name]?.selected },
+    }))
+  }
+  function setWeight(name: string, weight: number) {
+    setToolCfg((p) => ({
+      ...p,
+      [name]: { ...(p[name] ?? { selected: true }), weight },
+    }))
+  }
+
+  function submit() {
+    const numeric = (s: string) => {
+      const n = Number(s)
+      return s.trim() !== "" && !Number.isNaN(n) ? n : undefined
+    }
+    onRun({
+      testType,
+      vus,
+      durationSec,
+      tools: selectedTools.map((name) => ({
+        name,
+        weight: toolCfg[name]?.weight ?? 1,
+      })),
+      thresholds: {
+        p95Ms: numeric(p95Ms),
+        errorRatePct: numeric(errorRatePct),
+        minThroughputRps: numeric(minThroughputRps),
+      },
+    })
+  }
+
+  const canRun = !running && !runLimited && selectedTools.length > 0
+
+  return (
+    <section className="space-y-4">
+      {/* --- Config --- */}
+      <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5 space-y-5">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <div className="flex items-center gap-2">
+              <Gauge className="h-4 w-4 text-amber-300" />
+              <h3 className="text-sm font-medium text-white">Load & stress test</h3>
+            </div>
+            <p className="text-xs text-white/40 mt-0.5">
+              Hammer your MCP tools with concurrent virtual users. Args come from
+              each tool's doc.
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            onClick={submit}
+            disabled={!canRun}
+            className="h-8 bg-blue-600 hover:bg-blue-500 text-white gap-1.5"
+          >
+            {running ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Play className="h-3.5 w-3.5" />
+            )}
+            {running ? "Running…" : "Run test"}
+          </Button>
+        </div>
+
+        {/* Test type */}
+        <div className="space-y-2">
+          <label className="text-[10px] text-white/45 uppercase tracking-wider">
+            Test type
+          </label>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {LOAD_TEST_TYPES.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTestType(t.id)}
+                className={cn(
+                  "rounded-lg border px-3 py-2 text-left transition-colors",
+                  testType === t.id
+                    ? "border-blue-500/50 bg-blue-500/10"
+                    : "border-white/10 bg-white/[0.02] hover:border-white/20"
+                )}
+              >
+                <div className="flex items-center gap-1.5">
+                  <Zap
+                    className={cn(
+                      "h-3.5 w-3.5",
+                      testType === t.id ? "text-blue-300" : "text-white/40"
+                    )}
+                  />
+                  <span className="text-sm font-medium text-white">{t.label}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+          {activeType && (
+            <p className="text-xs text-white/40">{activeType.hint}</p>
+          )}
+        </div>
+
+        {/* VUs + duration */}
+        <div className="grid grid-cols-2 gap-3">
+          <label className="space-y-1">
+            <span className="text-[10px] text-white/45 uppercase tracking-wider">
+              {testType === "load" || testType === "soak"
+                ? "Virtual users"
+                : "Peak virtual users"}
+            </span>
+            <Input
+              type="number"
+              min={1}
+              max={200}
+              value={vus}
+              onChange={(e) => setVus(Math.max(1, Number(e.target.value) || 1))}
+              className={fieldClass}
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="text-[10px] text-white/45 uppercase tracking-wider">
+              Duration (seconds)
+            </span>
+            <Input
+              type="number"
+              min={3}
+              max={600}
+              value={durationSec}
+              onChange={(e) =>
+                setDurationSec(Math.max(3, Number(e.target.value) || 3))
+              }
+              className={fieldClass}
+            />
+          </label>
+        </div>
+
+        {/* Tools + weights */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] text-white/45 uppercase tracking-wider">
+              Tools & traffic mix
+            </label>
+            <span className="text-[11px] text-white/35">
+              {selectedTools.length}/{toolNames.length} selected · weight = share
+              of calls
+            </span>
+          </div>
+          {toolNames.length === 0 ? (
+            <p className="text-sm text-white/40 rounded-md border border-white/10 bg-white/[0.02] px-3 py-6 text-center">
+              This project has no tools yet.
+            </p>
+          ) : (
+            <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+              {toolNames.map((name) => {
+                const cfg = toolCfg[name] ?? { selected: true, weight: 1 }
+                return (
+                  <div
+                    key={name}
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg border px-3 py-2 transition-colors",
+                      cfg.selected
+                        ? "border-white/15 bg-white/[0.04]"
+                        : "border-white/5 bg-transparent opacity-50"
+                    )}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggleTool(name)}
+                      className={cn(
+                        "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                        cfg.selected
+                          ? "border-blue-500 bg-blue-500"
+                          : "border-white/25"
+                      )}
+                    >
+                      {cfg.selected && (
+                        <CheckCircle2 className="h-3 w-3 text-white" />
+                      )}
+                    </button>
+                    <span className="flex-1 min-w-0 truncate font-mono text-xs text-white/80">
+                      {name}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-white/35">weight</span>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={20}
+                        value={cfg.weight}
+                        disabled={!cfg.selected}
+                        onChange={(e) =>
+                          setWeight(
+                            name,
+                            Math.max(1, Math.min(20, Number(e.target.value) || 1))
+                          )
+                        }
+                        className={cn(fieldClass, "h-7 w-16 text-center")}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Thresholds */}
+        <div className="space-y-2">
+          <label className="text-[10px] text-white/45 uppercase tracking-wider">
+            Pass/fail thresholds (optional — you decide)
+          </label>
+          <div className="grid grid-cols-3 gap-3">
+            <label className="space-y-1">
+              <span className="text-[11px] text-white/50">p95 ≤ (ms)</span>
+              <Input
+                type="number"
+                placeholder="—"
+                value={p95Ms}
+                onChange={(e) => setP95Ms(e.target.value)}
+                className={fieldClass}
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="text-[11px] text-white/50">errors ≤ (%)</span>
+              <Input
+                type="number"
+                placeholder="—"
+                value={errorRatePct}
+                onChange={(e) => setErrorRatePct(e.target.value)}
+                className={fieldClass}
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="text-[11px] text-white/50">throughput ≥ (rps)</span>
+              <Input
+                type="number"
+                placeholder="—"
+                value={minThroughputRps}
+                onChange={(e) => setMinThroughputRps(e.target.value)}
+                className={fieldClass}
+              />
+            </label>
+          </div>
+        </div>
+
+        {runLimited && (
+          <p className="text-xs text-amber-300/80">
+            Free trial load-run limit reached — contact the provider to upgrade.
+          </p>
+        )}
+      </div>
+
+      {/* --- Results --- */}
+      {run && <LoadResults run={run} />}
+    </section>
+  )
+}
+
+function LoadResults({ run }: { run: McpLoadRunResponse }) {
+  const s = run.summary
+  const verdictStyle =
+    run.verdict === "pass"
+      ? "border-green-500/30 bg-green-500/10 text-green-300"
+      : run.verdict === "fail"
+        ? "border-red-500/30 bg-red-500/10 text-red-300"
+        : "border-white/15 bg-white/5 text-white/60"
+
+  const ts = run.timeSeries ?? []
+  const vuPts = ts.map((b) => ({ t: b.t, y: b.activeVUs }))
+  const rpsPts = ts.map((b) => ({ t: b.t, y: b.rps }))
+  const p95Pts = ts.map((b) => ({ t: b.t, y: b.p95Ms }))
+  const errPts = ts.map((b) => ({
+    t: b.t,
+    y: b.requests ? +((b.failed / b.requests) * 100).toFixed(1) : 0,
+  }))
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5 space-y-5">
+      {/* verdict + headline stats */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <span
+            className={cn(
+              "flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium",
+              verdictStyle
+            )}
+          >
+            {run.verdict === "pass" ? (
+              <CheckCircle2 className="h-3.5 w-3.5" />
+            ) : run.verdict === "fail" ? (
+              <XCircle className="h-3.5 w-3.5" />
+            ) : (
+              <AlertTriangle className="h-3.5 w-3.5" />
+            )}
+            {run.verdict === "pass"
+              ? "Passed"
+              : run.verdict === "fail"
+                ? "Failed"
+                : "No thresholds"}
+          </span>
+          <span className="text-xs text-white/40 capitalize">
+            {run.testType} · peak {s.peakVUs} VUs · {s.actualDurationSec}s
+          </span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+        <StatTile label="Requests" value={s.totalRequests.toLocaleString()} />
+        <StatTile label="Throughput" value={`${s.throughputRps}`} unit="rps" />
+        <StatTile
+          label="Error rate"
+          value={`${s.errorRatePct}`}
+          unit="%"
+          tone={s.errorRatePct >= 5 ? "bad" : s.errorRatePct > 0 ? "warn" : "good"}
+        />
+        <StatTile label="p95" value={`${s.latencyMs.p95}`} unit="ms" />
+        <StatTile label="p99" value={`${s.latencyMs.p99}`} unit="ms" />
+        <StatTile label="Peak VUs" value={`${s.peakVUs}`} />
+      </div>
+
+      {/* thresholds */}
+      {run.thresholdResults.length > 0 && (
+        <div className="space-y-2">
+          <h4 className="text-[10px] text-white/45 uppercase tracking-wider">
+            Thresholds
+          </h4>
+          <div className="flex flex-wrap gap-2">
+            {run.thresholdResults.map((t) => (
+              <span
+                key={t.metric}
+                className={cn(
+                  "rounded-md border px-2 py-1 text-xs font-mono",
+                  t.passed
+                    ? "border-green-500/30 bg-green-500/10 text-green-300"
+                    : "border-red-500/30 bg-red-500/10 text-red-300"
+                )}
+              >
+                {t.passed ? "✓" : "✗"} {t.metric} {t.op} {t.target} (was{" "}
+                {t.actual})
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* time-series small multiples (single series each — one axis per chart) */}
+      {ts.length > 1 && (
+        <div className="space-y-2">
+          <h4 className="text-[10px] text-white/45 uppercase tracking-wider">
+            Over time
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <MiniChart title="Active VUs" points={vuPts} color="#a1a1aa" kind="step" />
+            <MiniChart title="Throughput" unit="rps" points={rpsPts} color="#3b82f6" />
+            <MiniChart title="p95 latency" unit="ms" points={p95Pts} color="#f59e0b" />
+            <MiniChart title="Error rate" unit="%" points={errPts} color="#ef4444" />
+          </div>
+        </div>
+      )}
+
+      {/* per-tool breakdown */}
+      <div className="space-y-2">
+        <h4 className="text-[10px] text-white/45 uppercase tracking-wider">
+          Per tool
+        </h4>
+        <div className="overflow-x-auto rounded-lg border border-white/10">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-white/10 text-white/40">
+                <th className="text-left font-normal px-3 py-2">Tool</th>
+                <th className="text-right font-normal px-3 py-2">Wt</th>
+                <th className="text-right font-normal px-3 py-2">Reqs</th>
+                <th className="text-right font-normal px-3 py-2">Err%</th>
+                <th className="text-right font-normal px-3 py-2">rps</th>
+                <th className="text-right font-normal px-3 py-2">p95</th>
+                <th className="text-right font-normal px-3 py-2">p99</th>
+              </tr>
+            </thead>
+            <tbody>
+              {run.tools.map((t) => (
+                <tr
+                  key={t.toolName}
+                  className="border-b border-white/5 last:border-0"
+                >
+                  <td className="px-3 py-2 font-mono text-white/80 max-w-[180px] truncate">
+                    {t.toolName}
+                    {t.firstError && (
+                      <span
+                        className="ml-1.5 text-red-300/70"
+                        title={t.firstError}
+                      >
+                        ⚠
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-right text-white/50">{t.weight}</td>
+                  <td className="px-3 py-2 text-right text-white/70">
+                    {t.requests}
+                  </td>
+                  <td
+                    className={cn(
+                      "px-3 py-2 text-right font-mono",
+                      t.errorRatePct >= 5
+                        ? "text-red-300"
+                        : t.errorRatePct > 0
+                          ? "text-amber-300"
+                          : "text-white/50"
+                    )}
+                  >
+                    {t.errorRatePct}
+                  </td>
+                  <td className="px-3 py-2 text-right text-white/70">
+                    {t.throughputRps}
+                  </td>
+                  <td className="px-3 py-2 text-right text-white/70">
+                    {t.latencyMs.p95}
+                  </td>
+                  <td className="px-3 py-2 text-right text-white/70">
+                    {t.latencyMs.p99}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* interpretation notes */}
+      {run.notes.length > 0 && (
+        <div className="space-y-1.5">
+          <h4 className="text-[10px] text-white/45 uppercase tracking-wider">
+            What this means
+          </h4>
+          <ul className="space-y-1">
+            {run.notes.map((n, i) => (
+              <li
+                key={i}
+                className="flex gap-2 text-xs text-white/70 rounded-md border border-white/10 bg-white/[0.02] px-3 py-2"
+              >
+                <span className="text-amber-300/70">›</span>
+                <span>{n}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function StatTile({
+  label,
+  value,
+  unit,
+  tone,
+}: {
+  label: string
+  value: string
+  unit?: string
+  tone?: "good" | "warn" | "bad"
+}) {
+  const toneClass =
+    tone === "bad"
+      ? "text-red-300"
+      : tone === "warn"
+        ? "text-amber-300"
+        : "text-white"
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2.5">
+      <div className="text-[10px] text-white/40 uppercase tracking-wider">
+        {label}
+      </div>
+      <div className={cn("mt-1 text-lg font-semibold tabular-nums", toneClass)}>
+        {value}
+        {unit && <span className="ml-0.5 text-xs text-white/40">{unit}</span>}
+      </div>
+    </div>
+  )
+}
+
+// A single-series sparkline with hover crosshair. Its own y-scale, so metrics of
+// different units never share an axis (no dual-axis charts).
+function MiniChart({
+  title,
+  unit,
+  points,
+  color,
+  kind = "area",
+}: {
+  title: string
+  unit?: string
+  points: { t: number; y: number }[]
+  color: string
+  kind?: "area" | "step"
+}) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null)
+  const W = 100
+  const H = 34
+  const maxY = Math.max(1, ...points.map((p) => p.y))
+  const maxT = Math.max(1, ...points.map((p) => p.t))
+  const xAt = (t: number) => (t / maxT) * W
+  const yAt = (v: number) => H - (v / maxY) * H
+
+  let line = ""
+  if (points.length) {
+    if (kind === "step") {
+      line = points
+        .map((p, i) => {
+          const x = xAt(p.t).toFixed(2)
+          const y = yAt(p.y).toFixed(2)
+          if (i === 0) return `M${x},${y}`
+          const prevY = yAt(points[i - 1].y).toFixed(2)
+          return `L${x},${prevY} L${x},${y}`
+        })
+        .join(" ")
+    } else {
+      line = points
+        .map((p, i) => `${i === 0 ? "M" : "L"}${xAt(p.t).toFixed(2)},${yAt(p.y).toFixed(2)}`)
+        .join(" ")
+    }
+  }
+  const area =
+    points.length && kind !== "step"
+      ? `${line} L${xAt(points[points.length - 1].t).toFixed(2)},${H} L${xAt(points[0].t).toFixed(2)},${H} Z`
+      : ""
+
+  const hovered = hoverIdx != null ? points[hoverIdx] : null
+
+  function onMove(e: React.MouseEvent<HTMLDivElement>) {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const frac = (e.clientX - rect.left) / rect.width
+    const t = frac * maxT
+    let best = 0
+    let bestD = Infinity
+    points.forEach((p, i) => {
+      const d = Math.abs(p.t - t)
+      if (d < bestD) {
+        bestD = d
+        best = i
+      }
+    })
+    setHoverIdx(best)
+  }
+
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+      <div className="flex items-baseline justify-between mb-1.5">
+        <span className="text-xs text-white/60">{title}</span>
+        <span className="text-[11px] font-mono text-white/40">
+          {hovered ? (
+            <>
+              t={hovered.t}s ·{" "}
+              <span className="text-white/70">
+                {hovered.y}
+                {unit ? ` ${unit}` : ""}
+              </span>
+            </>
+          ) : (
+            <>
+              peak {maxY}
+              {unit ? ` ${unit}` : ""}
+            </>
+          )}
+        </span>
+      </div>
+      <div
+        className="relative"
+        onMouseMove={onMove}
+        onMouseLeave={() => setHoverIdx(null)}
+      >
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          preserveAspectRatio="none"
+          className="w-full h-12 overflow-visible"
+        >
+          {area && <path d={area} fill={color} fillOpacity={0.14} />}
+          {line && (
+            <path
+              d={line}
+              fill="none"
+              stroke={color}
+              strokeWidth={1.5}
+              vectorEffect="non-scaling-stroke"
+              strokeLinejoin="round"
+            />
+          )}
+          {hovered && (
+            <>
+              <line
+                x1={xAt(hovered.t)}
+                y1={0}
+                x2={xAt(hovered.t)}
+                y2={H}
+                stroke="#ffffff"
+                strokeOpacity={0.25}
+                strokeWidth={1}
+                vectorEffect="non-scaling-stroke"
+              />
+              <circle
+                cx={xAt(hovered.t)}
+                cy={yAt(hovered.y)}
+                r={2.5}
+                fill={color}
+                stroke="#0a0a0a"
+                strokeWidth={1}
+                vectorEffect="non-scaling-stroke"
+              />
+            </>
+          )}
+        </svg>
+      </div>
+    </div>
   )
 }
 

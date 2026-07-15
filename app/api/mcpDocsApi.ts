@@ -327,6 +327,7 @@ export type McpTrialLimitAction =
   | "smoke_run"
   | "regression_generate"
   | "regression_run"
+  | "load_run"
 
 export class McpTrialLimitError extends Error {
   action?: McpTrialLimitAction | string
@@ -518,6 +519,129 @@ export async function refineMcpRegressionCase(
     }
   )
   return readJson<McpRegressionRefineResponse>(res)
+}
+
+// --- Load / stress tester ("k6 for MCP") ---
+
+export type McpLoadTestType = "load" | "stress" | "spike" | "soak" | "custom"
+
+export interface McpLatencyStats {
+  min: number
+  p50: number
+  p90: number
+  p95: number
+  p99: number
+  max: number
+  avg: number
+}
+
+export interface McpLoadStage {
+  target: number
+  durationSec: number
+}
+
+/** One tool in the traffic mix: how much weight it gets and (optionally) args. */
+export interface McpLoadToolSpec {
+  name: string
+  weight?: number
+  args?: Record<string, unknown>
+}
+
+export interface McpLoadThresholds {
+  p95Ms?: number
+  p99Ms?: number
+  errorRatePct?: number
+  minThroughputRps?: number
+}
+
+export interface McpLoadRunPayload {
+  testType: McpLoadTestType
+  vus?: number
+  durationSec?: number
+  stages?: McpLoadStage[]
+  tools?: Array<string | McpLoadToolSpec>
+  thresholds?: McpLoadThresholds
+}
+
+export interface McpLoadToolResult {
+  toolName: string
+  weight: number
+  requests: number
+  ok: number
+  failed: number
+  errorRatePct: number
+  throughputRps: number
+  latencyMs: McpLatencyStats
+  avgResponseBytes: number
+  firstError?: string | null
+  args?: Record<string, unknown>
+}
+
+export interface McpLoadTimeBucket {
+  t: number
+  activeVUs: number
+  requests: number
+  failed: number
+  p95Ms: number
+  rps: number
+}
+
+export interface McpLoadThresholdResult {
+  metric: string
+  op: string
+  target: number
+  actual: number
+  passed: boolean
+}
+
+export interface McpLoadSummary {
+  totalRequests: number
+  okRequests: number
+  failedRequests: number
+  errorRatePct: number
+  throughputRps: number
+  latencyMs: McpLatencyStats
+  actualDurationSec: number
+  peakVUs: number
+}
+
+export interface McpLoadRunResponse {
+  runId?: string
+  projectId: string
+  serverName: string
+  serverUrl?: string
+  transport: McpTransport
+  testType: McpLoadTestType
+  stages: McpLoadStage[]
+  selectedTools: string[]
+  peakVUs: number
+  totalDurationSec: number
+  thresholds: McpLoadThresholds
+  summary: McpLoadSummary
+  thresholdResults: McpLoadThresholdResult[]
+  verdict: "pass" | "fail" | "no-thresholds"
+  notes: string[]
+  tools: McpLoadToolResult[]
+  timeSeries: McpLoadTimeBucket[]
+}
+
+export async function runMcpLoad(
+  projectId: string,
+  payload: McpLoadRunPayload
+) {
+  const res = await apiFetch(`/api/mcp-lab/projects/${projectId}/load/run`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+  return readJson<McpLoadRunResponse>(res)
+}
+
+export async function listMcpLoadRuns(projectId?: string) {
+  const query = projectId ? `?${new URLSearchParams({ projectId })}` : ""
+  const res = await apiFetch(`/api/mcp-lab/load/runs${query}`, {
+    cache: "no-store",
+  })
+  return readJson<{ runs: McpLoadRunResponse[] }>(res)
 }
 
 export async function listMcpBugs(projectId: string) {
