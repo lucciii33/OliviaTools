@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, type MouseEvent } from "react"
 import { useNavigate } from "react-router"
 import {
   ArrowLeft,
@@ -49,6 +49,8 @@ export default function E2eQa() {
     improveTest,
     commitTest,
     deleteTest,
+    startClientRecording,
+    finishClientRecording,
     loading,
     error,
   } = useE2eApi()
@@ -74,7 +76,17 @@ export default function E2eQa() {
 
   const fileRef = useRef<HTMLInputElement>(null)
   const [videoName, setVideoName] = useState<string | null>(null)
+  const [uploadingVideo, setUploadingVideo] = useState(false)
   const [recordingId, setRecordingId] = useState<string | null>(null)
+  // Cloud recorder: the active session the customer is driving in the embedded
+  // browser (null when no cloud recording is open).
+  const [cloudRec, setCloudRec] = useState<{
+    testId: string
+    recordingId: string
+    liveViewUrl: string
+  } | null>(null)
+  const [startingCloud, setStartingCloud] = useState<string | null>(null)
+  const [finishingCloud, setFinishingCloud] = useState(false)
   const [improvingId, setImprovingId] = useState<string | null>(null)
   const [committingId, setCommittingId] = useState<string | null>(null)
   const [authing, setAuthing] = useState(false)
@@ -188,12 +200,17 @@ export default function E2eQa() {
   }
 
   async function handleUpload(file: File) {
-    if (!feature) return
+    if (!feature || uploadingVideo) return
+    setUploadingVideo(true)
     setVideoName(file.name)
-    const res = await generateFromVideo(feature._id, file)
-    if (res) {
-      setTests(await listTests(feature._id))
-      if (project) refreshFeatures(project._id) // update the feature's test count
+    try {
+      const res = await generateFromVideo(feature._id, file)
+      if (res) {
+        setTests(await listTests(feature._id))
+        if (project) refreshFeatures(project._id) // update the feature's test count
+      }
+    } finally {
+      setUploadingVideo(false)
     }
   }
 
@@ -205,32 +222,6 @@ export default function E2eQa() {
     if (res) {
       // refresh the selected project so the "login ready" status updates
       await refreshProject(project._id)
-    }
-  }
-
-  async function handleRecord(id: string) {
-    if (!project) return
-    setRecordingId(id)
-    let res = await recordTest(id, activeEnvName)
-    if (res && "loginRequired" in res) {
-      setRecordingId(null)
-      const label = activeEnvName || "this project"
-      const ok = window.confirm(
-        `You need to capture the login for ${label} first. Open the login recorder now?`
-      )
-      if (!ok) return
-      setAuthing(true)
-      const login = await recordLogin(project._id, activeEnvName)
-      setAuthing(false)
-      if (!login) return
-      await refreshProject(project._id)
-      setRecordingId(id)
-      res = await recordTest(id, activeEnvName)
-    }
-    setRecordingId(null)
-    if (res && !("loginRequired" in res) && feature) {
-      // refresh so the saved spec + new status show up
-      setTests(await listTests(feature._id))
     }
   }
 
@@ -252,6 +243,39 @@ export default function E2eQa() {
       }
       return
     }
+    if (res && feature) setTests(await listTests(feature._id))
+  }
+
+  // Cloud recorder: open a Browserbase browser the customer drives from the
+  // embedded live view — no install, no changes to their app.
+  async function handleCloudRecord(id: string) {
+    if (!project) return
+    setStartingCloud(id)
+    const res = await startClientRecording(id, activeEnvName)
+    setStartingCloud(null)
+    if (res && "loginRequired" in res) {
+      const label = activeEnvName || "this project"
+      const ok = window.confirm(
+        `You need to capture the login for ${label} first. Open the login recorder now?`
+      )
+      if (!ok) return
+      setAuthing(true)
+      const login = await recordLogin(project._id, activeEnvName)
+      setAuthing(false)
+      if (login) await refreshProject(project._id)
+      return
+    }
+    if (res && "liveViewUrl" in res) {
+      setCloudRec({ testId: id, recordingId: res.recordingId, liveViewUrl: res.liveViewUrl })
+    }
+  }
+
+  async function handleFinishCloud() {
+    if (!cloudRec) return
+    setFinishingCloud(true)
+    const res = await finishClientRecording(cloudRec.recordingId)
+    setFinishingCloud(false)
+    setCloudRec(null)
     if (res && feature) setTests(await listTests(feature._id))
   }
 
@@ -320,6 +344,62 @@ export default function E2eQa() {
 
   return (
     <div className="flex min-h-screen bg-background">
+      {/* Cloud recorder: the customer drives a real browser (running in the
+          cloud) from this embedded live view. Olivia injects the recorder +
+          their logged-in session — they install nothing, change nothing in
+          their app. Clicks are captured and become a Playwright spec on Finish. */}
+      {cloudRec && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/70 p-4">
+          <div className="mx-auto flex h-full w-full max-w-6xl flex-col overflow-hidden rounded-xl border bg-background shadow-2xl">
+            <div className="flex items-center justify-between border-b px-4 py-3">
+              <div className="flex items-center gap-2">
+                <Circle className="h-3 w-3 animate-pulse fill-red-500 text-red-500" />
+                <span className="text-sm font-medium">
+                  Recording — click through your flow, then Finish
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  type="button"
+                  disabled={finishingCloud}
+                  onClick={() => {
+                    // Cancel: tear down without saving a spec.
+                    finishClientRecording(cloudRec.recordingId)
+                    setCloudRec(null)
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  type="button"
+                  disabled={finishingCloud}
+                  onClick={handleFinishCloud}
+                >
+                  {finishingCloud ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" /> Generating…
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-4 w-4" /> Finish & generate
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+            <iframe
+              title="Cloud recorder"
+              src={cloudRec.liveViewUrl}
+              className="h-full w-full flex-1 bg-white"
+              sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+              allow="clipboard-read; clipboard-write"
+            />
+          </div>
+        </div>
+      )}
       <Sidebar />
       <main className="flex-1 p-8 max-w-5xl mx-auto w-full">
         {!project ? (
@@ -536,6 +616,7 @@ export default function E2eQa() {
         ) : (
           <>
             <button
+              type="button"
               onClick={() => setFeature(null)}
               className="flex items-center gap-1 text-sm text-muted-foreground mb-4 hover:text-foreground"
             >
@@ -564,8 +645,8 @@ export default function E2eQa() {
               <p className="text-sm text-muted-foreground mb-3">
                 {videoName ? videoName : "Upload a screen recording of your demo (max 25MB)"}
               </p>
-              <Button onClick={() => fileRef.current?.click()} disabled={loading}>
-                {loading ? (
+              <Button type="button" onClick={() => fileRef.current?.click()} disabled={uploadingVideo}>
+                {uploadingVideo ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" /> Transcribing & generating…
                   </>
@@ -624,12 +705,18 @@ export default function E2eQa() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleRecord(t._id)}
-                          disabled={recordingId !== null || improvingId !== null}
+                          type="button"
+                          onClick={() => handleCloudRecord(t._id)}
+                          disabled={
+                            startingCloud !== null ||
+                            cloudRec !== null ||
+                            improvingId !== null
+                          }
+                          title="Record in a cloud browser — nothing to install"
                         >
-                          {recordingId === t._id ? (
+                          {startingCloud === t._id ? (
                             <>
-                              <Loader2 className="h-4 w-4 animate-spin" /> Recording…
+                              <Loader2 className="h-4 w-4 animate-spin" /> Opening…
                             </>
                           ) : (
                             <>
@@ -640,6 +727,7 @@ export default function E2eQa() {
                         </Button>
                         <Button
                           size="sm"
+                          type="button"
                           onClick={() => handleImprove(t._id)}
                           disabled={
                             !t.specCode ||
@@ -666,6 +754,7 @@ export default function E2eQa() {
                         <Button
                           size="sm"
                           variant="outline"
+                          type="button"
                           onClick={() => handleCommit(t._id)}
                           disabled={
                             !t.specCode ||

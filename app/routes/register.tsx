@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate, useSearchParams } from "react-router"
 import { Sparkles } from "lucide-react"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
+import { PasswordInput } from "~/components/ui/password-input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "~/components/ui/card"
 import { useAuth } from "~/context/AuthContext"
 import { registerApi, googleLoginApi, isTwoFactorChallenge } from "~/api/authApi"
@@ -173,9 +174,8 @@ export default function Register() {
             </div>
             <div className="space-y-1.5">
               <label className="text-xs text-white/60">Password</label>
-              <Input
+              <PasswordInput
                 name="password"
-                type="password"
                 placeholder="••••••••"
                 value={form.password}
                 onChange={handleChange}

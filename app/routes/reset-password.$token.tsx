@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from "react"
 import { Link, useNavigate, useParams } from "react-router"
 import { Sparkles, ShieldCheck } from "lucide-react"
 import { Button } from "~/components/ui/button"
-import { Input } from "~/components/ui/input"
+import { PasswordInput } from "~/components/ui/password-input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "~/components/ui/card"
 import { resetPasswordApi } from "~/api/authApi"
 
@@ -103,8 +103,7 @@ export default function ResetPassword() {
             <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
               <div className="space-y-1.5">
                 <label className="text-xs text-white/60">New password</label>
-                <Input
-                  type="password"
+                <PasswordInput
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -115,8 +114,7 @@ export default function ResetPassword() {
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs text-white/60">Confirm new password</label>
-                <Input
-                  type="password"
+                <PasswordInput
                   value={confirm}
                   onChange={(e) => setConfirm(e.target.value)}
                   required

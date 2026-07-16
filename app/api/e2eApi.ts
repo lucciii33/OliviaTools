@@ -391,6 +391,65 @@ export function useE2eApi() {
     }
   }
 
+  // Cloud recorder (SaaS): opens a Browserbase cloud browser the customer
+  // drives from an embedded live view — no install, no changes to their app.
+  // Returns the live-view URL to embed; recording streams to the backend.
+  const startClientRecording = async (
+    testId: string,
+    env?: string
+  ): Promise<{ recordingId: string; liveViewUrl: string; authReady: boolean } | { loginRequired: true; env: string | null } | null> => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await apiFetch(`/api/e2e/tests/${testId}/client-record/start`, {
+        method: "POST",
+        body: JSON.stringify({ env }),
+      })
+      if (!res.ok) {
+        const bodyText = await res.text()
+        if (res.status === 409) {
+          const body = bodyText ? safeJson(bodyText) : null
+          if (body?.code === "LOGIN_REQUIRED") {
+            return { loginRequired: true, env: body.env ?? null }
+          }
+        }
+        setError(bodyText || `Could not start recording (${res.status})`)
+        return null
+      }
+      return (await res.json()) as { recordingId: string; liveViewUrl: string; authReady: boolean }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not start recording")
+      return null
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Ends the cloud recording: tears down the browser and turns the captured
+  // actions into a Playwright spec saved on the test (feeds the heal loop).
+  const finishClientRecording = async (
+    recordingId: string
+  ): Promise<{ specCode: string; eventCount: number; status: string } | null> => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await apiFetch(`/api/e2e/recordings/${recordingId}/finish`, {
+        method: "POST",
+      })
+      if (!res.ok) {
+        const bodyText = await res.text()
+        setError(bodyText || `Could not finish recording (${res.status})`)
+        return null
+      }
+      return (await res.json()) as { specCode: string; eventCount: number; status: string }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not finish recording")
+      return null
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return {
     loading,
     error,
@@ -408,6 +467,8 @@ export function useE2eApi() {
     improveTest,
     commitTest,
     deleteTest,
+    startClientRecording,
+    finishClientRecording,
   }
 }
 

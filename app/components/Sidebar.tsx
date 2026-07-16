@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { BookOpen, FileCode, FlaskConical, Menu, Settings } from "lucide-react"
+import { ArrowLeft, BookOpen, FileCode, FlaskConical, Menu, Settings } from "lucide-react"
 import { Link, useLocation } from "react-router"
 import { Button } from "~/components/ui/button"
 import {
@@ -26,6 +26,7 @@ function SidebarContent() {
   const isWorkspaceActive = location.pathname === "/workspace"
   const isSwaggerActive = location.pathname === "/swagger-qa"
   const isE2eActive = location.pathname === "/e2e-qa"
+  const isDashboardActive = location.pathname === "/dashboard"
 
   useEffect(() => {
     getInstallations()
@@ -40,6 +41,20 @@ function SidebarContent() {
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        <Link
+          to="/dashboard"
+          className={cn(
+            itemBase,
+            "mb-3",
+            isDashboardActive ? itemActive : itemIdle
+          )}
+        >
+          <span className="inline-flex items-center gap-2">
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Dashboard
+          </span>
+        </Link>
+
         <Link
           to="/swagger-qa"
           className={cn(
