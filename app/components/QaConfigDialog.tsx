@@ -45,10 +45,14 @@ export function QaConfigDialog({
   const [baseUrl, setBaseUrl] = useState("")
   const [authType, setAuthType] = useState<QaAuthType>("none")
   const [authValue, setAuthValue] = useState("")
+  // Masked hint of the already-saved secret, so the user knows a token exists
+  // and that leaving the field blank keeps it (the real value is never sent back).
+  const [savedMask, setSavedMask] = useState("")
   const [headerName, setHeaderName] = useState("")
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [headers, setHeaders] = useState<HeaderRow[]>([])
+  const [vars, setVars] = useState<HeaderRow[]>([])
 
   useEffect(() => {
     if (!open) return
@@ -60,6 +64,7 @@ export function QaConfigDialog({
         setBaseUrl(cfg.baseUrl ?? "")
         setAuthType(cfg.auth?.type ?? "none")
         setAuthValue(cfg.auth?.value ?? "")
+        setSavedMask(cfg.auth?.valueMasked ?? "")
         setHeaderName(cfg.auth?.headerName ?? "")
         setUsername(cfg.auth?.username ?? "")
         setPassword(cfg.auth?.password ?? "")
@@ -70,6 +75,9 @@ export function QaConfigDialog({
               value,
             }))
           )
+        }
+        if (cfg.variables?.length) {
+          setVars(cfg.variables.map((v) => ({ key: v.key, value: v.value })))
         }
       })
       .finally(() => {
@@ -91,6 +99,16 @@ export function QaConfigDialog({
 
   function removeHeader(i: number) {
     setHeaders((h) => h.filter((_, idx) => idx !== i))
+  }
+
+  function addVar() {
+    setVars((v) => [...v, { key: "", value: "" }])
+  }
+  function updateVar(i: number, patch: Partial<HeaderRow>) {
+    setVars((v) => v.map((row, idx) => (idx === i ? { ...row, ...patch } : row)))
+  }
+  function removeVar(i: number) {
+    setVars((v) => v.filter((_, idx) => idx !== i))
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -116,6 +134,9 @@ export function QaConfigDialog({
           : {}),
       },
       ...(Object.keys(defaultHeaders).length > 0 ? { defaultHeaders } : {}),
+      variables: vars
+        .filter((v) => v.key.trim())
+        .map((v) => ({ key: v.key.trim(), value: v.value.trim() })),
     }
 
     const saved = await saveConfig(owner, repo, config)
@@ -174,7 +195,11 @@ export function QaConfigDialog({
                 <Input
                   value={authValue}
                   onChange={(e) => setAuthValue(e.target.value)}
-                  placeholder="eyJhbGciOi…"
+                  placeholder={
+                    savedMask
+                      ? `${savedMask} — leave blank to keep`
+                      : "eyJhbGciOi…"
+                  }
                   type="password"
                   className="bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-blue-500/50"
                 />
@@ -268,6 +293,59 @@ export function QaConfigDialog({
                         variant="ghost"
                         size="icon"
                         onClick={() => removeHeader(i)}
+                        className="h-9 w-9 shrink-0 text-white/40 hover:text-red-400 hover:bg-red-500/10"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs text-white/60">
+                  Path variables <span className="text-white/30">(optional)</span>
+                </label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={addVar}
+                  className="h-7 text-xs text-white/60 hover:text-white hover:bg-white/10 gap-1"
+                >
+                  <Plus className="h-3 w-3" />
+                  Add
+                </Button>
+              </div>
+              <p className="text-xs text-white/30">
+                Fill a real id into the route. Key{" "}
+                <code className="text-white/50">id</code> (no <code>:</code> or{" "}
+                <code>{"{}"}</code>) fills <code className="text-white/50">:id</code>{" "}
+                in the path — e.g. a real ObjectId, so the happy path can be tested.
+              </p>
+              {vars.length > 0 && (
+                <div className="space-y-2">
+                  {vars.map((row, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Input
+                        value={row.key}
+                        onChange={(e) => updateVar(i, { key: e.target.value })}
+                        placeholder="id"
+                        className="bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-blue-500/50"
+                      />
+                      <Input
+                        value={row.value}
+                        onChange={(e) => updateVar(i, { value: e.target.value })}
+                        placeholder="6a205b0dbce455aaa51ea03d"
+                        className="bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-blue-500/50"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeVar(i)}
                         className="h-9 w-9 shrink-0 text-white/40 hover:text-red-400 hover:bg-red-500/10"
                       >
                         <X className="h-4 w-4" />

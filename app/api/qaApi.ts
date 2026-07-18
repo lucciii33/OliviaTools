@@ -7,6 +7,9 @@ export type QaAuthType = "none" | "bearer" | "apiKey" | "basic" | "custom" | "oa
 export interface QaAuthConfig {
   type: QaAuthType
   value?: string
+  // Masked hint of the saved secret, returned by the server (never the real value).
+  valueMasked?: string
+  passwordMasked?: string
   headerName?: string
   username?: string
   password?: string
@@ -16,6 +19,8 @@ export interface QaConfig {
   baseUrl: string
   auth: QaAuthConfig
   defaultHeaders?: Record<string, string>
+  // Path/template variables — fill :id / {id} in the route and {{key}} tokens.
+  variables?: { key: string; value: string }[]
 }
 
 export type QaTestGroup = "happy" | "sad" | "boundary" | "security" | "chain"
@@ -43,10 +48,18 @@ export interface QaExecution {
     error?: string
   }
   isBug: boolean
+  // Happy path we couldn't verify because no real path-param value existed.
+  needsData?: boolean
   bugTitle?: string
   bugDescription?: string
   bugSeverity?: string
   bugCategory?: string
+}
+
+export interface QaWarning {
+  type: string
+  params?: string[]
+  message: string
 }
 
 export interface QaRun {
@@ -56,6 +69,7 @@ export interface QaRun {
   totalTests: number
   bugCount: number
   executions: QaExecution[]
+  warnings?: QaWarning[]
   postmanCollection?: unknown
   createdAt?: string
 }

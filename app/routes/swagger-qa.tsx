@@ -6,6 +6,7 @@ import {
   ChevronDown,
   Download,
   FileCode,
+  History,
   Info,
   Link2,
   Loader2,
@@ -29,6 +30,7 @@ import {
   type ApiProject,
   type BugRecord,
   type QaRun,
+  type QaRunSummary,
   type SpecCandidate,
   type SuiteRun,
 } from "~/api/qaApi"
@@ -741,12 +743,16 @@ function SectionCard({
 // One endpoint: expand to read its docs (request + response), see saved bugs
 // (mark done / delete), or Run QA on it.
 function EndpointRow({ doc, canRun }: { doc: Doc; canRun: boolean }) {
-  const { runQa, getBugs, setBugStatus, deleteBug } = useQaApi()
+  const { runQa, getBugs, setBugStatus, deleteBug, getRuns, getRun } =
+    useQaApi()
   const [open, setOpen] = useState(false)
   const [running, setRunning] = useState(false)
   const [run, setRun] = useState<QaRun | null>(null)
   const [bugs, setBugs] = useState<BugRecord[]>([])
   const [bugsLoaded, setBugsLoaded] = useState(false)
+  const [runs, setRuns] = useState<QaRunSummary[]>([])
+  const [runsLoaded, setRunsLoaded] = useState(false)
+  const [loadingRunId, setLoadingRunId] = useState<string | null>(null)
 
   async function loadBugs() {
     const b = await getBugs(doc._id)
@@ -754,10 +760,26 @@ function EndpointRow({ doc, canRun }: { doc: Doc; canRun: boolean }) {
     setBugsLoaded(true)
   }
 
+  async function loadRuns() {
+    const r = await getRuns(doc._id)
+    setRuns(r)
+    setRunsLoaded(true)
+  }
+
   useEffect(() => {
-    if (open && !bugsLoaded) loadBugs()
+    if (open && !bugsLoaded) {
+      loadBugs()
+      loadRuns()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
+
+  async function openRun(id: string) {
+    setLoadingRunId(id)
+    const r = await getRun(id)
+    setLoadingRunId(null)
+    if (r) setRun(r)
+  }
 
   async function runOne() {
     setRunning(true)
@@ -766,6 +788,7 @@ function EndpointRow({ doc, canRun }: { doc: Doc; canRun: boolean }) {
     if (r) {
       setRun(r)
       loadBugs() // refresh saved bugs after a run
+      loadRuns() // refresh run history after a run
     }
   }
 
@@ -883,6 +906,47 @@ function EndpointRow({ doc, canRun }: { doc: Doc; canRun: boolean }) {
                   onToggleDone={() => toggleDone(b)}
                   onDelete={() => removeBug(b._id)}
                 />
+              ))}
+            </div>
+          </div>
+
+          {/* QA run history — past runs, re-openable (incl. Postman download) */}
+          <div>
+            <div className="flex items-center gap-1.5 text-white/40 uppercase tracking-wider text-[10px] mb-1">
+              <History className="h-3 w-3" />
+              QA history {runsLoaded ? `(${runs.length})` : "…"}
+            </div>
+            {runsLoaded && runs.length === 0 && (
+              <p className="text-white/30">No runs yet.</p>
+            )}
+            <div className="space-y-1">
+              {runs.map((r) => (
+                <button
+                  key={r._id}
+                  type="button"
+                  onClick={() => openRun(r._id)}
+                  className="w-full flex items-center gap-3 rounded bg-black/20 border border-white/10 px-2.5 py-1.5 text-left hover:bg-white/[0.04] transition-colors"
+                >
+                  {loadingRunId === r._id ? (
+                    <Loader2 className="h-3 w-3 animate-spin text-white/40 shrink-0" />
+                  ) : (
+                    <Play className="h-3 w-3 text-white/40 shrink-0" />
+                  )}
+                  <span className="text-white/70 flex-1 truncate">
+                    {new Date(r.createdAt).toLocaleString()}
+                  </span>
+                  <span className="text-white/50 font-mono shrink-0">
+                    {r.totalTests} tests
+                  </span>
+                  <span
+                    className={cn(
+                      "font-mono shrink-0",
+                      r.bugCount > 0 ? "text-red-400" : "text-green-400"
+                    )}
+                  >
+                    {r.bugCount} bug{r.bugCount === 1 ? "" : "s"}
+                  </span>
+                </button>
               ))}
             </div>
           </div>

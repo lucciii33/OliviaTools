@@ -1699,11 +1699,19 @@ function SmokeCaseCard({
       )}
 
       {testCase.assertions && testCase.assertions.length > 0 && (
-        <ul className="mt-2 space-y-0.5 text-[11px] text-white/55 list-disc list-inside">
-          {testCase.assertions.map((a, i) => (
-            <li key={i}>{a}</li>
-          ))}
-        </ul>
+        <div className="mt-2">
+          <h5 className="text-[10px] text-white/40 uppercase tracking-wider mb-1">
+            Checks · {testCase.assertions.length}
+          </h5>
+          <ul className="space-y-1 text-[11px] text-white/60">
+            {testCase.assertions.map((a, i) => (
+              <li key={i} className="flex items-start gap-1.5">
+                <CheckCircle2 className="h-3 w-3 text-emerald-300/70 mt-0.5 shrink-0" />
+                <span>{a}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {canRefine && (
@@ -1718,7 +1726,7 @@ function SmokeCaseCard({
               }
             }}
             disabled={refining}
-            placeholder="Tell the AI how to change this test…"
+            placeholder="Add or change a check (e.g. 'also assert status is 400')…"
             className={cn(fieldClass, "h-8 text-xs")}
           />
           <Button
@@ -2059,11 +2067,19 @@ function RegressionCaseCard({
       ) : null}
 
       {testCase.assertions && testCase.assertions.length > 0 && (
-        <ul className="mt-2 space-y-0.5 text-[11px] text-white/55 list-disc list-inside">
-          {testCase.assertions.map((a, i) => (
-            <li key={i}>{a}</li>
-          ))}
-        </ul>
+        <div className="mt-2">
+          <h5 className="text-[10px] text-white/40 uppercase tracking-wider mb-1">
+            Checks · {testCase.assertions.length}
+          </h5>
+          <ul className="space-y-1 text-[11px] text-white/60">
+            {testCase.assertions.map((a, i) => (
+              <li key={i} className="flex items-start gap-1.5">
+                <CheckCircle2 className="h-3 w-3 text-emerald-300/70 mt-0.5 shrink-0" />
+                <span>{a}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {canRefine && (
@@ -2078,7 +2094,7 @@ function RegressionCaseCard({
               }
             }}
             disabled={refining}
-            placeholder="Tell the AI how to change this test…"
+            placeholder="Add or change a check (e.g. 'also assert status is 400')…"
             className={cn(fieldClass, "h-8 text-xs")}
           />
           <Button

@@ -88,6 +88,16 @@ export function QaRunView({ run, repoLabel }: QaRunViewProps) {
         )}
       </div>
 
+      {run.warnings?.map((w, i) => (
+        <div
+          key={i}
+          className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-200"
+        >
+          <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-amber-400" />
+          <span>{w.message}</span>
+        </div>
+      ))}
+
       <div className="rounded-md border border-white/10 overflow-hidden">
         <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-3 px-3 py-2 text-xs text-white/40 uppercase tracking-wider bg-white/[0.02] border-b border-white/10">
           <span>Test</span>
@@ -159,6 +169,8 @@ function ExecutionRow({
         </span>
         {ex.isBug ? (
           <XCircle className="h-4 w-4 text-red-400" />
+        ) : ex.needsData ? (
+          <AlertCircle className="h-4 w-4 text-amber-400" />
         ) : (
           <CheckCircle2 className="h-4 w-4 text-green-400" />
         )}
@@ -168,6 +180,17 @@ function ExecutionRow({
         <div className="px-3 pb-4 pt-1 space-y-3 bg-white/[0.02]">
           {ex.rationale && (
             <p className="text-xs text-white/60 italic">{ex.rationale}</p>
+          )}
+
+          {ex.needsData && (
+            <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-200">
+              <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-400" />
+              <span>
+                Couldn&apos;t verify the happy path — no real value for the path
+                id, so it ran with an invented one. Add a project variable with a
+                real id (or a list endpoint) to test the success case.
+              </span>
+            </div>
           )}
 
           {ex.isBug && (
