@@ -37,6 +37,27 @@ import {
 import { useInstallationsApi } from "~/api/installationsApi"
 import { cn } from "~/lib/utils"
 
+function ProjectListSkeleton() {
+  return (
+    <div className="space-y-2" role="status" aria-label="Loading API projects">
+      <p className="text-xs text-white/40 uppercase tracking-wider">Your APIs</p>
+      {[0, 1, 2].map((item) => (
+        <div
+          key={item}
+          className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.02] px-4 py-3"
+        >
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-400/70" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3 w-2/5 animate-pulse rounded bg-white/10" />
+            <div className="h-2.5 w-3/5 animate-pulse rounded bg-white/[0.07]" />
+          </div>
+        </div>
+      ))}
+      <span className="sr-only">Loading API projects...</span>
+    </div>
+  )
+}
+
 // Standalone product: paste a Swagger/OpenAPI spec → it becomes an API project
 // with endpoints grouped by section → run the bug-hunting agent + download one
 // Postman collection per section. Decoupled from the GitHub-docs flow.
@@ -59,6 +80,7 @@ export default function SwaggerQa() {
   const { installations, getInstallations } = useInstallationsApi()
 
   const [projects, setProjects] = useState<ApiProject[]>([])
+  const [projectsLoading, setProjectsLoading] = useState(true)
   const [specText, setSpecText] = useState("")
   const [importing, setImporting] = useState(false)
 
@@ -94,7 +116,10 @@ export default function SwaggerQa() {
       navigate("/login", { replace: true })
       return
     }
-    listProjects().then(setProjects)
+    setProjectsLoading(true)
+    listProjects()
+      .then(setProjects)
+      .finally(() => setProjectsLoading(false))
     getInstallations()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user])
@@ -258,7 +283,10 @@ export default function SwaggerQa() {
         {/* ---- Project list + paste (home) ---- */}
         {!project && (
           <div className="space-y-6">
-            {projects.length > 0 && (
+            {projectsLoading && projects.length === 0 && (
+              <ProjectListSkeleton />
+            )}
+            {!projectsLoading && projects.length > 0 && (
               <div className="space-y-2">
                 <p className="text-xs text-white/40 uppercase tracking-wider">
                   Your APIs
@@ -605,11 +633,6 @@ export default function SwaggerQa() {
           </>
         )}
 
-        {loading && !project && projects.length === 0 && (
-          <div className="flex justify-center py-10">
-            <Loader2 className="h-6 w-6 animate-spin text-white/30" />
-          </div>
-        )}
       </main>
 
       {project && (

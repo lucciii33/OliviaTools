@@ -59,6 +59,7 @@ export default function E2eQa() {
   const { installations, getInstallations } = useInstallationsApi()
 
   const [projects, setProjects] = useState<E2eProject[]>([])
+  const [projectsLoading, setProjectsLoading] = useState(true)
   const [project, setProject] = useState<E2eProject | null>(null)
   // Middle level: the features of the open project. `feature` is the one being
   // viewed (its video upload + test cases). null → showing the features list.
@@ -101,7 +102,10 @@ export default function E2eQa() {
       navigate("/login", { replace: true })
       return
     }
-    listProjects().then(setProjects)
+    setProjectsLoading(true)
+    listProjects()
+      .then(setProjects)
+      .finally(() => setProjectsLoading(false))
     getInstallations()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user])
@@ -462,7 +466,13 @@ export default function E2eQa() {
             {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
 
             {/* Project grid */}
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {projectsLoading && projects.length === 0 && (
+              <div className="mb-4 flex items-center gap-2 rounded-lg border border-dashed p-4 text-sm text-muted-foreground" role="status">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading automation projects...
+              </div>
+            )}
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-busy={projectsLoading}>
               {projects.map((p) => (
                 <div
                   key={p._id}

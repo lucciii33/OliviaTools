@@ -224,7 +224,9 @@ export default function McpDocs() {
   }
   const [save, setSave] = useState(true)
   const [connecting, setConnecting] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
+  // Start in loading state so the first render never claims there are no
+  // projects while the MCP request is still in flight.
+  const [refreshing, setRefreshing] = useState(true)
   const [projectLoading, setProjectLoading] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<McpDoc | null>(null)
@@ -883,6 +885,17 @@ export default function McpDocs() {
             >
               <span>New project</span>
             </Link>
+            {refreshing && projects.length === 0 && (
+              <div className="space-y-1 px-1 py-1" role="status" aria-label="Loading MCP projects">
+                {["w-4/5", "w-3/5", "w-2/3"].map((width, index) => (
+                  <div key={index} className="flex items-center gap-2 px-2 py-2">
+                    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-blue-400/70" />
+                    <span className={cn("h-3 rounded bg-white/10 animate-pulse", width)} />
+                  </div>
+                ))}
+                <span className="sr-only">Loading MCP projects...</span>
+              </div>
+            )}
             {projects.map((project) => (
               <Link
                 key={project._id}
@@ -899,9 +912,14 @@ export default function McpDocs() {
                 </span>
               </Link>
             ))}
-            {projects.length === 0 && (
+            {!refreshing && !error && projects.length === 0 && (
               <p className="px-2 py-2 text-xs text-white/35">
                 No MCP projects yet.
+              </p>
+            )}
+            {!refreshing && error && projects.length === 0 && (
+              <p className="mx-1 mt-2 rounded-md bg-red-500/10 px-2 py-2 text-xs text-red-300">
+                Could not load MCP projects.
               </p>
             )}
           </div>

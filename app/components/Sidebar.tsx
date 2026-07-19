@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { ArrowLeft, BookOpen, FileCode, FlaskConical, Menu, Settings } from "lucide-react"
+import { AlertCircle, ArrowLeft, BookOpen, FileCode, FlaskConical, Loader2, Menu, Settings } from "lucide-react"
 import { Link, useLocation } from "react-router"
 import { Button } from "~/components/ui/button"
 import {
@@ -21,7 +21,7 @@ const itemActive = "bg-white/10 text-white"
 function SidebarContent() {
   const { user, logout } = useAuth()
   const location = useLocation()
-  const { installations, getInstallations } = useInstallationsApi()
+  const { installations, loading, error, getInstallations } = useInstallationsApi()
   const isAllActive = location.pathname === "/docs"
   const isWorkspaceActive = location.pathname === "/workspace"
   const isSwaggerActive = location.pathname === "/swagger-qa"
@@ -88,6 +88,26 @@ function SidebarContent() {
         >
           <span>All repos</span>
         </Link>
+        {loading && installations.length === 0 && (
+          <div className="space-y-1 px-1 py-1" role="status" aria-label="Loading repositories">
+            {["w-4/5", "w-3/5", "w-2/3"].map((width, index) => (
+              <div key={index} className="flex items-center gap-2 px-2 py-2">
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-blue-400/70" />
+                <span className={cn("h-3 rounded bg-white/10 animate-pulse", width)} />
+              </div>
+            ))}
+            <span className="sr-only">Loading connected repositories...</span>
+          </div>
+        )}
+        {!loading && error && installations.length === 0 && (
+          <div className="mx-1 my-2 flex items-start gap-2 rounded-md bg-red-500/10 px-2 py-2 text-xs text-red-300">
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>Could not load repositories.</span>
+          </div>
+        )}
+        {!loading && !error && installations.length === 0 && (
+          <p className="px-2 py-2 text-xs text-white/35">No repositories connected.</p>
+        )}
         {installations.map((i) => {
           const path = `/docs/${i.owner}/${i.repo}`
           const active = location.pathname === path
