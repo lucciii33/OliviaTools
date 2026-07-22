@@ -222,7 +222,29 @@ export default function Register() {
                 data-testid="register-terms"
                 className="mt-0.5 h-4 w-4 rounded border-white/20 bg-white/10"
               />
-              <span>I accept the terms and workspace membership rules.</span>
+              <span>
+                I have read and accept the{" "}
+                <Link
+                  to="/terms"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-400 hover:text-blue-300 underline"
+                  data-testid="register-terms-link"
+                >
+                  Terms of Service
+                </Link>{" "}
+                and{" "}
+                <Link
+                  to="/privacy"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-400 hover:text-blue-300 underline"
+                  data-testid="register-privacy-link"
+                >
+                  Privacy Policy
+                </Link>
+                .
+              </span>
             </label>
 
             {error && (

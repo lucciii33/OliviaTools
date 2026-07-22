@@ -1,7 +1,7 @@
 import { Link } from "react-router"
 import { Sparkles } from "lucide-react"
 
-const LAST_UPDATED = "May 28, 2026"
+const LAST_UPDATED = "July 23, 2026"
 const CONTACT_EMAIL = "support@oliviatool.com"
 
 const sections = [
@@ -14,8 +14,10 @@ const sections = [
   {
     title: "2. Information we collect",
     list: [
-      "Account data: your name, email, password (stored hashed), and workspace membership.",
+      "Account data: your name, email, password (stored hashed), country, age, and workspace membership.",
       "Project data: repositories, MCP server URLs, tool schemas, sample arguments, and the documentation and QA results we generate from them.",
+      "Integration credentials: API keys you connect (such as your Anthropic API key), which we store encrypted and use only to run the features you enable.",
+      "Payment data: when you subscribe, our payment processor (Stripe) handles your card details and gives us a customer identifier and billing status. We never see or store your full card number.",
       "Usage data: basic logs such as IP address, browser type, and the actions you take in the app, used to keep the service secure and reliable.",
     ],
   },
@@ -39,7 +41,7 @@ const sections = [
   {
     title: "5. How we share information",
     body: [
-      "We share data only with service providers that help us run Olivia (such as hosting and infrastructure), and only as needed to operate the service. We may also disclose information if required by law or to protect the rights and safety of our users.",
+      "We share data only with service providers that help us run Olivia (such as hosting and infrastructure, and Stripe for payment processing), and only as needed to operate the service. We may also disclose information if required by law or to protect the rights and safety of our users.",
     ],
   },
   {

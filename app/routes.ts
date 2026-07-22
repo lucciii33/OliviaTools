@@ -21,6 +21,7 @@ export default [
   ),
   route("mcp-docs/:projectId/load", "routes/mcp-docs.$projectId.load.tsx"),
   route("privacy", "routes/privacy.tsx"),
+  route("terms", "routes/terms.tsx"),
   route("docs", "routes/docs.tsx"),
   route("docs/:owner/:repo", "routes/docs.$owner.$repo.tsx"),
   route("swagger-qa", "routes/swagger-qa.tsx"),
