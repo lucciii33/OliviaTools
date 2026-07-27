@@ -15,6 +15,7 @@ export function useInstallationsApi() {
   const [installations, setInstallations] = useState<Installation[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [disconnecting, setDisconnecting] = useState(false)
 
   const getInstallations = async () => {
     setLoading(true)
@@ -33,5 +34,28 @@ export function useInstallationsApi() {
     }
   }
 
-  return { installations, loading, error, getInstallations }
+  const disconnectInstallation = async (installationId: number | string) => {
+    setDisconnecting(true)
+    try {
+      const res = await fetch(`${BASE_URL}/api/installations/${installationId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${getAuthToken()}` },
+      })
+      if (!res.ok) throw new Error("Request failed")
+      return true
+    } catch {
+      return false
+    } finally {
+      setDisconnecting(false)
+    }
+  }
+
+  return {
+    installations,
+    loading,
+    error,
+    getInstallations,
+    disconnectInstallation,
+    disconnecting,
+  }
 }

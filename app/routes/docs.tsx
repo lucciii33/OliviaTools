@@ -1,12 +1,13 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
-import { ArrowRight, Github, Rocket, X } from "lucide-react";
+import { ArrowRight, Check, Copy, Github, Rocket, X } from "lucide-react";
 import { Button, buttonVariants } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Sidebar } from "~/components/Sidebar";
 import { BackfillDialog } from "~/components/BackfillDialog";
 import { useAuth } from "~/context/AuthContext";
+import { useInstallationsApi } from "~/api/installationsApi";
 import {
   addKnownRepo,
   getKnownRepos,
@@ -24,6 +25,8 @@ export default function DocsIndex() {
   const [backfillOpen, setBackfillOpen] = useState(false);
   const [quickOwner, setQuickOwner] = useState("");
   const [quickRepo, setQuickRepo] = useState("");
+  const { installations, getInstallations } = useInstallationsApi();
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -31,7 +34,19 @@ export default function DocsIndex() {
       return;
     }
     setRepos(getKnownRepos());
+    getInstallations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, navigate]);
+
+  const installationIds = Array.from(
+    new Set(installations.map((i) => String(i.installationId))),
+  );
+
+  function handleCopyId(id: string) {
+    void navigator.clipboard.writeText(id);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId((current) => (current === id ? null : current)), 1500);
+  }
 
   const connectUrl = `https://github.com/apps/${GITHUB_APP_SLUG}/installations/new?state=${user?._id ?? ""}`;
 
@@ -65,6 +80,23 @@ export default function DocsIndex() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {installationIds.map((id) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => handleCopyId(id)}
+                title="Click to copy Installation ID"
+                className="inline-flex items-center gap-1.5 text-xs text-white/60 hover:text-white bg-white/5 hover:bg-white/10 border border-white/15 rounded-full px-3 py-1 transition-colors"
+              >
+                <Github className="h-3 w-3" />
+                ID: <span className="font-mono text-white/85">{id}</span>
+                {copiedId === id ? (
+                  <Check className="h-3 w-3 text-emerald-400" />
+                ) : (
+                  <Copy className="h-3 w-3" />
+                )}
+              </button>
+            ))}
             {repos.length > 0 && (
               <a
                 href={connectUrl}
