@@ -8,6 +8,7 @@ import { Sidebar } from "~/components/Sidebar";
 import { BackfillDialog } from "~/components/BackfillDialog";
 import { useAuth } from "~/context/AuthContext";
 import { useInstallationsApi } from "~/api/installationsApi";
+import { useGithubConnectLink } from "~/api/githubConnectApi";
 import {
   addKnownRepo,
   getKnownRepos,
@@ -15,8 +16,6 @@ import {
   type KnownRepo,
 } from "~/lib/knownRepos";
 import { cn } from "~/lib/utils";
-
-const GITHUB_APP_SLUG = import.meta.env.VITE_GITHUB_APP_SLUG ?? "OliviaTools";
 
 export default function DocsIndex() {
   const { user } = useAuth();
@@ -26,6 +25,7 @@ export default function DocsIndex() {
   const [quickOwner, setQuickOwner] = useState("");
   const [quickRepo, setQuickRepo] = useState("");
   const { installations, getInstallations } = useInstallationsApi();
+  const { connectUrl, getConnectLink } = useGithubConnectLink();
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -38,6 +38,14 @@ export default function DocsIndex() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, navigate]);
 
+  // The install link carries a short-lived (15 min) signed token — fetched
+  // right when the user clicks, not on page load.
+  async function handleConnectClick(e: React.MouseEvent) {
+    e.preventDefault();
+    const url = await getConnectLink();
+    if (url) window.open(url, "_blank", "noopener,noreferrer");
+  }
+
   const installationIds = Array.from(
     new Set(installations.map((i) => String(i.installationId))),
   );
@@ -47,8 +55,6 @@ export default function DocsIndex() {
     setCopiedId(id);
     setTimeout(() => setCopiedId((current) => (current === id ? null : current)), 1500);
   }
-
-  const connectUrl = `https://github.com/apps/${GITHUB_APP_SLUG}/installations/new?state=${user?._id ?? ""}`;
 
   if (!user) return null;
 
@@ -99,9 +105,8 @@ export default function DocsIndex() {
             ))}
             {repos.length > 0 && (
               <a
-                href={connectUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+                href="#"
+                onClick={handleConnectClick}
                 className={cn(
                   buttonVariants({ variant: "outline", size: "sm" }),
                   "border-white/20 text-white/80 hover:text-white hover:bg-white/10 hover:border-white/30 gap-1.5",
@@ -124,7 +129,7 @@ export default function DocsIndex() {
 
         {repos.length === 0 && (
           <EmptyState
-            connectUrl={connectUrl}
+            onConnect={handleConnectClick}
             onBackfill={() => setBackfillOpen(true)}
           />
         )}
@@ -204,10 +209,10 @@ export default function DocsIndex() {
 }
 
 function EmptyState({
-  connectUrl,
+  onConnect,
   onBackfill,
 }: {
-  connectUrl: string;
+  onConnect: (e: React.MouseEvent) => void;
   onBackfill: () => void;
 }) {
   return (
@@ -237,9 +242,8 @@ function EmptyState({
 
           <div className="space-y-2">
             <a
-              href={connectUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+              href="#"
+              onClick={onConnect}
               className={cn(
                 buttonVariants(),
                 "w-full bg-blue-600 hover:bg-blue-500 text-white border-transparent inline-flex items-center justify-center gap-2",
