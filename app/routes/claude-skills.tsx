@@ -55,7 +55,7 @@ const skills = [
   {
     id: `${PLUGIN_NAME}:api`,
     icon: ListChecks,
-    accent: "sky",
+    accent: "sky" as const,
     tagline: "Build, run, and label the regression suite",
     body: "Reads your API docs end to end, writes down every endpoint, method, param, enum and documented error shape, then turns that inventory into a runnable Postman collection and executes it with Newman.",
     bullets: [
@@ -68,7 +68,7 @@ const skills = [
   {
     id: `${PLUGIN_NAME}:bugs`,
     icon: Bug,
-    accent: "rose",
+    accent: "rose" as const,
     tagline: "Turn confirmed failures into tickets",
     body: "Takes the confirmed findings and produces two things: a minimal repro collection and a Markdown ticket file a developer can act on without ever opening Postman.",
     bullets: [
