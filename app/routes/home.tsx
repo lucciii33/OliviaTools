@@ -1,4 +1,4 @@
-import { Link } from "react-router"
+import { Link } from "react-router";
 import {
   ArrowRight,
   BadgeCheck,
@@ -20,9 +20,9 @@ import {
   TerminalSquare,
   Wand2,
   Zap,
-} from "lucide-react"
-import { buttonVariants } from "~/components/ui/button"
-import { cn } from "~/lib/utils"
+} from "lucide-react";
+import { buttonVariants } from "~/components/ui/button";
+import { cn } from "~/lib/utils";
 
 const apiOutputs = [
   "Endpoint documentation",
@@ -31,7 +31,7 @@ const apiOutputs = [
   "Repo backfills",
   "PR change updates",
   "Endpoint QA runs",
-]
+];
 
 const mcpOutputs = [
   "Tool documentation",
@@ -40,7 +40,7 @@ const mcpOutputs = [
   "Live tool responses",
   "Smoke suites per project",
   "Tool-level bug reports",
-]
+];
 
 const qaOutputs = [
   {
@@ -61,7 +61,7 @@ const qaOutputs = [
     title: "Failures written like engineering tickets",
     body: "Each issue includes the target, scenario, severity, evidence, and recommendation so a developer can fix it without decoding a vague report.",
   },
-]
+];
 
 const e2eSteps = [
   {
@@ -88,7 +88,7 @@ const e2eSteps = [
     title: "It heals when the app changes",
     body: "When selectors drift or flows shift, Olivia repairs the test instead of letting it fail silently.",
   },
-]
+];
 
 const workflow = [
   {
@@ -106,7 +106,7 @@ const workflow = [
     title: "E2E source",
     body: "Record a browser flow once and Olivia generates a Playwright test, commits it to your repo, and heals it over time.",
   },
-]
+];
 
 const pricingTiers = [
   {
@@ -150,7 +150,7 @@ const pricingTiers = [
     cta: "Start with Enterprise",
     highlighted: false,
   },
-]
+];
 
 function CheckItem({ children }: { children: string }) {
   return (
@@ -158,7 +158,7 @@ function CheckItem({ children }: { children: string }) {
       <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
       <span>{children}</span>
     </li>
-  )
+  );
 }
 
 export default function Home() {
@@ -172,7 +172,9 @@ export default function Home() {
             </div>
             <div className="leading-tight">
               <span className="block text-sm font-semibold">Olivia Tool</span>
-              <span className="block text-[11px] text-white/45">API automation and MCP automation</span>
+              <span className="block text-[11px] text-white/45">
+                API automation and MCP automation
+              </span>
             </div>
           </Link>
 
@@ -187,10 +189,20 @@ export default function Home() {
               Pricing
             </a> */}
             <Link
+              to="/claude-skills"
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "sm" }),
+                "hidden gap-1.5 text-white/70 hover:bg-white/10 hover:text-white sm:inline-flex",
+              )}
+            >
+              <TerminalSquare className="h-3.5 w-3.5" />
+              Skills
+            </Link>
+            <Link
               to="/login"
               className={cn(
                 buttonVariants({ variant: "ghost", size: "sm" }),
-                "text-white/70 hover:bg-white/10 hover:text-white"
+                "text-white/70 hover:bg-white/10 hover:text-white",
               )}
             >
               Sign in
@@ -199,7 +211,7 @@ export default function Home() {
               to="/register"
               className={cn(
                 buttonVariants({ size: "sm" }),
-                "border-transparent bg-cyan-400 text-slate-950 hover:bg-cyan-300"
+                "border-transparent bg-cyan-400 text-slate-950 hover:bg-cyan-300",
               )}
             >
               Get started
@@ -222,9 +234,9 @@ export default function Home() {
               </h1>
 
               <p className="mt-5 max-w-2xl text-base leading-7 text-white/[0.66] md:text-lg">
-                Connect your MCP server and Olivia discovers every tool, writes the docs, runs
-                smoke tests with real arguments, and reports bugs with evidence — in minutes,
-                not sprints.
+                Connect your MCP server and Olivia discovers every tool, writes
+                the docs, runs smoke tests with real arguments, and reports bugs
+                with evidence — in minutes, not sprints.
               </p>
 
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
@@ -232,7 +244,7 @@ export default function Home() {
                   to="/register"
                   className={cn(
                     buttonVariants({ size: "lg" }),
-                    "border-transparent bg-cyan-400 text-slate-950 hover:bg-cyan-300"
+                    "border-transparent bg-cyan-400 text-slate-950 hover:bg-cyan-300",
                   )}
                 >
                   Start with Olivia <ArrowRight className="h-4 w-4" />
@@ -241,7 +253,7 @@ export default function Home() {
                   to="/login"
                   className={cn(
                     buttonVariants({ variant: "outline", size: "lg" }),
-                    "border-white/20 bg-white/[0.03] text-white/[0.85] hover:border-white/[0.35] hover:bg-white/10 hover:text-white"
+                    "border-white/20 bg-white/[0.03] text-white/[0.85] hover:border-white/[0.35] hover:bg-white/10 hover:text-white",
                   )}
                 >
                   Open workspace
@@ -268,11 +280,16 @@ export default function Home() {
                       API Docs + QA
                     </div>
                     <div className="space-y-2">
-                      {["GET /users", "POST /orders", "QA run: 15 tests"].map((item) => (
-                        <div key={item} className="rounded-md bg-white/[0.06] px-3 py-2 text-xs text-white/65">
-                          {item}
-                        </div>
-                      ))}
+                      {["GET /users", "POST /orders", "QA run: 15 tests"].map(
+                        (item) => (
+                          <div
+                            key={item}
+                            className="rounded-md bg-white/[0.06] px-3 py-2 text-xs text-white/65"
+                          >
+                            {item}
+                          </div>
+                        ),
+                      )}
                     </div>
                   </div>
 
@@ -282,11 +299,16 @@ export default function Home() {
                       MCP Docs + QA
                     </div>
                     <div className="space-y-2">
-                      {["search_docs", "create_ticket", "Smoke: 8 cases"].map((item) => (
-                        <div key={item} className="rounded-md bg-white/[0.06] px-3 py-2 text-xs text-white/65">
-                          {item}
-                        </div>
-                      ))}
+                      {["search_docs", "create_ticket", "Smoke: 8 cases"].map(
+                        (item) => (
+                          <div
+                            key={item}
+                            className="rounded-md bg-white/[0.06] px-3 py-2 text-xs text-white/65"
+                          >
+                            {item}
+                          </div>
+                        ),
+                      )}
                     </div>
                   </div>
                 </div>
@@ -303,11 +325,17 @@ export default function Home() {
                       </span>
                     </div>
                     <div className="flex items-center gap-2 text-[11px] text-white/55">
-                      <span className="rounded bg-white/[0.06] px-2 py-1">Run once</span>
+                      <span className="rounded bg-white/[0.06] px-2 py-1">
+                        Run once
+                      </span>
                       <ArrowRight className="h-3 w-3 text-white/30" />
-                      <span className="rounded bg-white/[0.06] px-2 py-1">checkout.spec.ts</span>
+                      <span className="rounded bg-white/[0.06] px-2 py-1">
+                        checkout.spec.ts
+                      </span>
                       <ArrowRight className="h-3 w-3 text-white/30" />
-                      <span className="rounded bg-emerald-400/10 px-2 py-1 text-emerald-200">Committed</span>
+                      <span className="rounded bg-emerald-400/10 px-2 py-1 text-emerald-200">
+                        Committed
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -315,8 +343,7 @@ export default function Home() {
                 <div className="border-t border-white/10 p-4">
                   <div className="flex items-center justify-between rounded-md border border-rose-300/15 bg-rose-400/10 px-3 py-3">
                     <div className="flex items-center gap-2 text-sm text-rose-100">
-                      <Bug className="h-4 w-4" />
-                      2 bugs found with evidence
+                      <Bug className="h-4 w-4" />2 bugs found with evidence
                     </div>
                     <CheckCircle2 className="h-4 w-4 text-emerald-300" />
                   </div>
@@ -335,18 +362,20 @@ export default function Home() {
                 New — E2E Automation
               </div>
               <h2 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">
-                Run it once. Olivia writes the Playwright test, commits it, and keeps it green.
+                Run it once. Olivia writes the Playwright test, commits it, and
+                keeps it green.
               </h2>
               <p className="mt-4 text-base leading-7 text-white/60">
-                No more hand-writing brittle end-to-end tests. Walk through a flow a single time
-                and Olivia generates a real Playwright spec with AI, commits it into your repo,
-                and self-heals it as your app evolves.
+                No more hand-writing brittle end-to-end tests. Walk through a
+                flow a single time and Olivia generates a real Playwright spec
+                with AI, commits it into your repo, and self-heals it as your
+                app evolves.
               </p>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {e2eSteps.map((item, i) => {
-                const Icon = item.icon
+                const Icon = item.icon;
                 return (
                   <article
                     key={item.step}
@@ -360,13 +389,17 @@ export default function Home() {
                         {item.step}
                       </span>
                     </div>
-                    <h3 className="text-base font-semibold text-white">{item.title}</h3>
-                    <p className="mt-2 text-sm leading-6 text-white/55">{item.body}</p>
+                    <h3 className="text-base font-semibold text-white">
+                      {item.title}
+                    </h3>
+                    <p className="mt-2 text-sm leading-6 text-white/55">
+                      {item.body}
+                    </p>
                     {i < e2eSteps.length - 1 && (
                       <ArrowRight className="absolute -right-3.5 top-1/2 hidden h-5 w-5 -translate-y-1/2 text-white/15 lg:block" />
                     )}
                   </article>
-                )
+                );
               })}
             </div>
 
@@ -375,12 +408,14 @@ export default function Home() {
                 to="/e2e-qa"
                 className={cn(
                   buttonVariants({ size: "lg" }),
-                  "border-transparent bg-cyan-400 text-slate-950 hover:bg-cyan-300"
+                  "border-transparent bg-cyan-400 text-slate-950 hover:bg-cyan-300",
                 )}
               >
                 Try E2E automation <ArrowRight className="h-4 w-4" />
               </Link>
-              <span className="text-sm text-white/45">Works with your existing Playwright setup.</span>
+              <span className="text-sm text-white/45">
+                Works with your existing Playwright setup.
+              </span>
             </div>
           </div>
         </section>
@@ -393,14 +428,17 @@ export default function Home() {
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-200/75">
                     API Automation
                   </p>
-                  <h2 className="mt-2 text-2xl font-semibold text-white">For repositories, endpoints, and API QA.</h2>
+                  <h2 className="mt-2 text-2xl font-semibold text-white">
+                    For repositories, endpoints, and API QA.
+                  </h2>
                 </div>
                 <GitPullRequest className="h-6 w-6 text-sky-200" />
               </div>
               <p className="text-sm leading-6 text-white/60">
-                This side of Olivia is built around code repositories. It scans API routes,
-                generates endpoint documentation, keeps docs aligned with pull request changes,
-                and runs QA against documented endpoints.
+                This side of Olivia is built around code repositories. It scans
+                API routes, generates endpoint documentation, keeps docs aligned
+                with pull request changes, and runs QA against documented
+                endpoints.
               </p>
               <ul className="mt-5 grid gap-2 sm:grid-cols-2">
                 {apiOutputs.map((item) => (
@@ -415,14 +453,17 @@ export default function Home() {
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-200/75">
                     MCP Automation
                   </p>
-                  <h2 className="mt-2 text-2xl font-semibold text-white">For servers, tools, schemas, and tool QA.</h2>
+                  <h2 className="mt-2 text-2xl font-semibold text-white">
+                    For servers, tools, schemas, and tool QA.
+                  </h2>
                 </div>
                 <Server className="h-6 w-6 text-violet-200" />
               </div>
               <p className="text-sm leading-6 text-white/60">
-                This side of Olivia is built around running MCP servers. It connects to the
-                server, discovers tools, documents each tool, captures sample behavior, creates
-                smoke suites, and tracks tool-level bugs.
+                This side of Olivia is built around running MCP servers. It
+                connects to the server, discovers tools, documents each tool,
+                captures sample behavior, creates smoke suites, and tracks
+                tool-level bugs.
               </p>
               <ul className="mt-5 grid gap-2 sm:grid-cols-2">
                 {mcpOutputs.map((item) => (
@@ -440,29 +481,38 @@ export default function Home() {
                 QA Layer
               </p>
               <h2 className="text-2xl font-semibold tracking-tight text-white md:text-3xl">
-                Testing is not an afterthought. It is generated from what Olivia understands.
+                Testing is not an afterthought. It is generated from what Olivia
+                understands.
               </h2>
               <p className="mt-3 text-sm leading-6 text-white/56">
-                API QA and MCP QA do not run the same way. Olivia keeps the workflows separate:
-                endpoint tests for APIs, tool execution tests for MCP, shared reporting for bugs.
+                API QA and MCP QA do not run the same way. Olivia keeps the
+                workflows separate: endpoint tests for APIs, tool execution
+                tests for MCP, shared reporting for bugs.
               </p>
             </div>
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               {qaOutputs.map((item) => {
-                const Icon = item.icon
+                const Icon = item.icon;
                 return (
-                  <article key={item.title} className="rounded-lg border border-white/10 bg-white/[0.035] p-5">
+                  <article
+                    key={item.title}
+                    className="rounded-lg border border-white/10 bg-white/[0.035] p-5"
+                  >
                     <div className="mb-7 flex items-center justify-between">
                       <span className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">
                         {item.label}
                       </span>
                       <Icon className="h-5 w-5 text-emerald-200" />
                     </div>
-                    <h3 className="text-base font-semibold text-white">{item.title}</h3>
-                    <p className="mt-2 text-sm leading-6 text-white/55">{item.body}</p>
+                    <h3 className="text-base font-semibold text-white">
+                      {item.title}
+                    </h3>
+                    <p className="mt-2 text-sm leading-6 text-white/55">
+                      {item.body}
+                    </p>
                   </article>
-                )
+                );
               })}
             </div>
           </div>
@@ -478,23 +528,31 @@ export default function Home() {
                 Three sources. Three outputs. One review surface.
               </h2>
               <p className="mt-3 text-sm leading-6 text-white/55">
-                Olivia is not only a docs generator. It is a workspace for turning engineering
-                systems into readable documentation, runnable checks, and actionable bug reports.
+                Olivia is not only a docs generator. It is a workspace for
+                turning engineering systems into readable documentation,
+                runnable checks, and actionable bug reports.
               </p>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
               {workflow.map((item) => {
-                const Icon = item.icon
+                const Icon = item.icon;
                 return (
-                  <article key={item.title} className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
+                  <article
+                    key={item.title}
+                    className="rounded-lg border border-white/10 bg-white/[0.035] p-4"
+                  >
                     <div className="mb-5 flex h-10 w-10 items-center justify-center rounded-md bg-white/[0.07]">
                       <Icon className="h-5 w-5 text-cyan-200" />
                     </div>
-                    <h3 className="text-sm font-semibold text-white">{item.title}</h3>
-                    <p className="mt-2 text-sm leading-6 text-white/50">{item.body}</p>
+                    <h3 className="text-sm font-semibold text-white">
+                      {item.title}
+                    </h3>
+                    <p className="mt-2 text-sm leading-6 text-white/50">
+                      {item.body}
+                    </p>
                   </article>
-                )
+                );
               })}
             </div>
           </div>
@@ -503,14 +561,33 @@ export default function Home() {
         <section className="px-5 py-12 md:px-8 md:py-16">
           <div className="mx-auto grid max-w-7xl gap-4 md:grid-cols-3">
             {[
-              ["API docs", "Generated from repositories, endpoint scans, and pull request changes.", BookOpen],
-              ["MCP docs", "Generated from connected servers, tools, schemas, and sample responses.", FileJson],
-              ["Bug evidence", "Generated from QA runs with severity, evidence, and recommendations.", ShieldCheck],
+              [
+                "API docs",
+                "Generated from repositories, endpoint scans, and pull request changes.",
+                BookOpen,
+              ],
+              [
+                "MCP docs",
+                "Generated from connected servers, tools, schemas, and sample responses.",
+                FileJson,
+              ],
+              [
+                "Bug evidence",
+                "Generated from QA runs with severity, evidence, and recommendations.",
+                ShieldCheck,
+              ],
             ].map(([title, body, Icon]) => (
-              <article key={title as string} className="rounded-lg border border-white/10 bg-white/[0.035] p-5">
+              <article
+                key={title as string}
+                className="rounded-lg border border-white/10 bg-white/[0.035] p-5"
+              >
                 <Icon className="mb-5 h-5 w-5 text-cyan-200" />
-                <h3 className="text-base font-semibold text-white">{title as string}</h3>
-                <p className="mt-2 text-sm leading-6 text-white/55">{body as string}</p>
+                <h3 className="text-base font-semibold text-white">
+                  {title as string}
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-white/55">
+                  {body as string}
+                </p>
               </article>
             ))}
           </div>
@@ -588,17 +665,20 @@ export default function Home() {
                 <BadgeCheck className="h-4 w-4" />
                 Built for teams shipping APIs, MCP servers, and integrations
               </div>
-              <h2 className="text-2xl font-semibold text-white">Separate workflows. Shared visibility.</h2>
+              <h2 className="text-2xl font-semibold text-white">
+                Separate workflows. Shared visibility.
+              </h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-white/60">
-                API teams get endpoint docs and API QA. MCP builders get tool docs and MCP QA.
-                Engineering leaders get a single place to see documentation, test coverage, and bugs.
+                API teams get endpoint docs and API QA. MCP builders get tool
+                docs and MCP QA. Engineering leaders get a single place to see
+                documentation, test coverage, and bugs.
               </p>
             </div>
             <Link
               to="/register"
               className={cn(
                 buttonVariants({ size: "lg" }),
-                "mt-5 border-transparent bg-white text-slate-950 hover:bg-white/90 md:mt-0"
+                "mt-5 border-transparent bg-white text-slate-950 hover:bg-white/90 md:mt-0",
               )}
             >
               Get Olivia Tool <ArrowRight className="h-4 w-4" />
@@ -608,16 +688,25 @@ export default function Home() {
       </main>
 
       <footer className="border-t border-white/10 px-5 py-6 text-center text-xs text-white/[0.35] md:px-8">
-        <p>Olivia Tool - API docs and QA for repositories. MCP docs and QA for live tool servers.</p>
+        <p>
+          Olivia Tool - API docs and QA for repositories. MCP docs and QA for
+          live tool servers.
+        </p>
         <div className="mt-2 flex items-center justify-center gap-4">
-          <Link to="/terms" className="inline-block text-white/45 hover:text-white/70">
+          <Link
+            to="/terms"
+            className="inline-block text-white/45 hover:text-white/70"
+          >
             Terms of Service
           </Link>
-          <Link to="/privacy" className="inline-block text-white/45 hover:text-white/70">
+          <Link
+            to="/privacy"
+            className="inline-block text-white/45 hover:text-white/70"
+          >
             Privacy Policy
           </Link>
         </div>
       </footer>
     </div>
-  )
+  );
 }

@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { AlertCircle, ArrowLeft, BookOpen, FileCode, FlaskConical, Loader2, Menu, Settings } from "lucide-react"
+import { AlertCircle, ArrowLeft, BookOpen, FileCode, FlaskConical, Loader2, Menu, Settings, TerminalSquare } from "lucide-react"
 import { Link, useLocation } from "react-router"
 import { Button } from "~/components/ui/button"
 import {
@@ -27,6 +27,7 @@ function SidebarContent() {
   const isSwaggerActive = location.pathname === "/swagger-qa"
   const isE2eActive = location.pathname === "/e2e-qa"
   const isDashboardActive = location.pathname === "/dashboard"
+  const isClaudeSkillsActive = location.pathname === "/claude-skills"
 
   useEffect(() => {
     getInstallations()
@@ -76,6 +77,20 @@ function SidebarContent() {
           <span className="inline-flex items-center gap-2">
             <FlaskConical className="h-3.5 w-3.5" />
             E2E QA (Playwright)
+          </span>
+        </Link>
+
+        <Link
+          to="/claude-skills"
+          className={cn(
+            itemBase,
+            "mb-3",
+            isClaudeSkillsActive ? itemActive : itemIdle
+          )}
+        >
+          <span className="inline-flex items-center gap-2">
+            <TerminalSquare className="h-3.5 w-3.5" />
+            Claude Skills
           </span>
         </Link>
 
