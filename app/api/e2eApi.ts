@@ -38,9 +38,12 @@ export interface E2eTest {
   projectId: string
   featureId: string | null
   name: string
-  source: "video" | "recording"
+  source: "video" | "recording" | "cloud-recording" | "manual"
   kind: E2eTestKind
   gherkin: Gherkin
+  // The scenario as written/pasted by the user. Source of truth once set — the
+  // `gherkin` arrays above can't express interleaved When/Then/And.
+  gherkinText?: string
   transcript?: string
   videoUrl?: string
   specCode?: string
@@ -117,6 +120,15 @@ export type ImproveTestResult =
       repo: { files: number; testIds: number }
     }
   | { loginRequired: true; env: string | null }
+
+// What the inline editor sends for a hand-written or edited case. On create,
+// `name` is required; on edit every key is optional and omitted ones are left
+// untouched (specCode/heal/commit are never editable from here).
+export interface TestCasePayload {
+  name?: string
+  kind?: E2eTestKind
+  gherkinText?: string
+}
 
 export interface GenerateFromVideoResult {
   transcript: string
@@ -265,6 +277,44 @@ export function useE2eApi() {
       return []
     }
     return (await res.json()) as E2eTest[]
+  }
+
+  // Write a case by hand instead of generating it from a video. It lands as a
+  // draft under the feature, same as a generated one.
+  const createTest = async (
+    featureId: string,
+    payload: TestCasePayload
+  ): Promise<E2eTest | null> => {
+    setError(null)
+    const res = await apiFetch(`/api/e2e/features/${featureId}/tests`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const body = await res.text()
+      setError(body || `Failed to create test case (${res.status})`)
+      return null
+    }
+    return (await res.json()) as E2eTest
+  }
+
+  // Edit name/kind/Gherkin of any case — the ones Claude wrote from the video
+  // included.
+  const updateTest = async (
+    testId: string,
+    payload: TestCasePayload
+  ): Promise<E2eTest | null> => {
+    setError(null)
+    const res = await apiFetch(`/api/e2e/tests/${testId}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const body = await res.text()
+      setError(body || `Failed to save test case (${res.status})`)
+      return null
+    }
+    return (await res.json()) as E2eTest
   }
 
   const deleteTest = async (testId: string): Promise<boolean> => {
@@ -450,6 +500,79 @@ export function useE2eApi() {
     }
   }
 
+  // Cloud login capture: same embedded Browserbase browser as the recorder, but
+  // the customer logs in by hand and we save the resulting session for the
+  // project. Unlike recordLogin (which opens a window on the BACKEND machine and
+  // therefore only works in local dev), this works in production.
+  const startCloudLogin = async (
+    projectId: string,
+    env?: string
+  ): Promise<{ recordingId: string; liveViewUrl: string; startUrl: string } | null> => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await apiFetch(`/api/e2e/projects/${projectId}/cloud-login/start`, {
+        method: "POST",
+        body: JSON.stringify({ env }),
+      })
+      if (!res.ok) {
+        const bodyText = await res.text()
+        // The backend answers with {message}. Show that sentence, not the raw
+        // JSON — these are errors the user is meant to act on (e.g. "that URL
+        // isn't reachable from the cloud browser").
+        setError(
+          safeJson(bodyText)?.message ||
+            bodyText ||
+            `Could not start the login browser (${res.status})`
+        )
+        return null
+      }
+      return (await res.json()) as {
+        recordingId: string
+        liveViewUrl: string
+        startUrl: string
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not start the login browser")
+      return null
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Ends the login capture: reads the session out of the cloud browser and
+  // saves it on the project. 422 = the user never actually logged in.
+  const finishCloudLogin = async (
+    recordingId: string
+  ): Promise<{ authReady: boolean; authSavedAt: string; env: string | null } | null> => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await apiFetch(`/api/e2e/cloud-login/${recordingId}/finish`, {
+        method: "POST",
+      })
+      if (!res.ok) {
+        const bodyText = await res.text()
+        setError(
+          safeJson(bodyText)?.message ||
+            bodyText ||
+            `Could not save the login (${res.status})`
+        )
+        return null
+      }
+      return (await res.json()) as {
+        authReady: boolean
+        authSavedAt: string
+        env: string | null
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save the login")
+      return null
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return {
     loading,
     error,
@@ -462,7 +585,11 @@ export function useE2eApi() {
     deleteFeature,
     generateFromVideo,
     listTests,
+    createTest,
+    updateTest,
     recordLogin,
+    startCloudLogin,
+    finishCloudLogin,
     recordTest,
     improveTest,
     commitTest,

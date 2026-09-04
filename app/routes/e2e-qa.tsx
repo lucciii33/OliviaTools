@@ -9,6 +9,7 @@ import {
   Globe2,
   Loader2,
   LogIn,
+  Pencil,
   Plus,
   Save,
   Sparkles,
@@ -24,6 +25,8 @@ import {
   type E2eProject,
   type E2eFeature,
   type E2eTest,
+  type E2eTestKind,
+  type Gherkin,
 } from "~/api/e2eApi"
 import { useInstallationsApi } from "~/api/installationsApi"
 import { cn } from "~/lib/utils"
@@ -44,7 +47,10 @@ export default function E2eQa() {
     deleteFeature,
     generateFromVideo,
     listTests,
-    recordLogin,
+    createTest,
+    updateTest,
+    startCloudLogin,
+    finishCloudLogin,
     recordTest,
     improveTest,
     commitTest,
@@ -68,6 +74,13 @@ export default function E2eQa() {
   const [newFeatureName, setNewFeatureName] = useState("")
   const [creatingFeature, setCreatingFeature] = useState(false)
   const [tests, setTests] = useState<E2eTest[]>([])
+  // Inline Gherkin editor. `editingCaseId` is the test being edited, or the
+  // NEW_CASE sentinel for the blank card at the top of the list — one editor
+  // serves both so a hand-written case and a video-generated one are edited
+  // exactly the same way.
+  const [editingCaseId, setEditingCaseId] = useState<string | null>(null)
+  const [caseDraft, setCaseDraft] = useState<TestDraft | null>(null)
+  const [savingCase, setSavingCase] = useState(false)
 
   // new-project inline form
   const [newName, setNewName] = useState("")
@@ -82,7 +95,10 @@ export default function E2eQa() {
   // Cloud recorder: the active session the customer is driving in the embedded
   // browser (null when no cloud recording is open).
   const [cloudRec, setCloudRec] = useState<{
-    testId: string
+    // "record" captures a flow for one test; "login" captures the project's
+    // session. Same embedded browser, different thing saved on finish.
+    mode: "record" | "login"
+    testId: string | null
     recordingId: string
     liveViewUrl: string
   } | null>(null)
@@ -218,14 +234,23 @@ export default function E2eQa() {
     }
   }
 
+  // Opens the login in the embedded cloud browser. The old flow called
+  // recordLogin, which launches Playwright's recorder on the BACKEND machine —
+  // that only ever opened a window when the backend ran on your own laptop, and
+  // silently did nothing in production. This is the same browser the recorder
+  // already uses, so it behaves identically locally and deployed.
   async function handleSetupLogin() {
     if (!project) return
     setAuthing(true)
-    const res = await recordLogin(project._id, activeEnvName)
+    const res = await startCloudLogin(project._id, activeEnvName)
     setAuthing(false)
     if (res) {
-      // refresh the selected project so the "login ready" status updates
-      await refreshProject(project._id)
+      setCloudRec({
+        mode: "login",
+        testId: null,
+        recordingId: res.recordingId,
+        liveViewUrl: res.liveViewUrl,
+      })
     }
   }
 
@@ -239,12 +264,7 @@ export default function E2eQa() {
       const ok = window.confirm(
         `You need to capture the login for ${label} before improving. Open the login recorder now?`
       )
-      if (ok) {
-        setAuthing(true)
-        const login = await recordLogin(project._id, activeEnvName)
-        setAuthing(false)
-        if (login) await refreshProject(project._id)
-      }
+      if (ok) await handleSetupLogin()
       return
     }
     if (res && feature) setTests(await listTests(feature._id))
@@ -263,29 +283,86 @@ export default function E2eQa() {
         `You need to capture the login for ${label} first. Open the login recorder now?`
       )
       if (!ok) return
-      setAuthing(true)
-      const login = await recordLogin(project._id, activeEnvName)
-      setAuthing(false)
-      if (login) await refreshProject(project._id)
+      await handleSetupLogin()
       return
     }
     if (res && "liveViewUrl" in res) {
-      setCloudRec({ testId: id, recordingId: res.recordingId, liveViewUrl: res.liveViewUrl })
+      setCloudRec({
+        mode: "record",
+        testId: id,
+        recordingId: res.recordingId,
+        liveViewUrl: res.liveViewUrl,
+      })
     }
   }
 
   async function handleFinishCloud() {
     if (!cloudRec) return
     setFinishingCloud(true)
+
+    if (cloudRec.mode === "login") {
+      const res = await finishCloudLogin(cloudRec.recordingId)
+      setFinishingCloud(false)
+      // The backend tears the browser down either way, so close the overlay
+      // even on failure — a 422 ("you never logged in") surfaces through the
+      // shared `error` banner and they can start a fresh capture.
+      setCloudRec(null)
+      if (res && project) await refreshProject(project._id)
+      return
+    }
+
     const res = await finishClientRecording(cloudRec.recordingId)
     setFinishingCloud(false)
     setCloudRec(null)
     if (res && feature) setTests(await listTests(feature._id))
   }
 
+  function startNewCase() {
+    setEditingCaseId(NEW_CASE)
+    setCaseDraft(emptyDraft())
+  }
+
+  function startEditCase(t: E2eTest) {
+    setEditingCaseId(t._id)
+    setCaseDraft(draftFromTest(t))
+  }
+
+  function cancelEditCase() {
+    setEditingCaseId(null)
+    setCaseDraft(null)
+  }
+
+  // The scenario travels as one block of text, exactly as typed. The backend
+  // stores it verbatim and derives the given/when/then arrays from it, so the
+  // step ORDER the user wrote (interleaved When/Then/And) survives.
+  async function handleSaveCase() {
+    if (!feature || !caseDraft || !caseDraft.name.trim() || savingCase) return
+    const payload = {
+      name: caseDraft.name.trim(),
+      kind: caseDraft.kind,
+      gherkinText: caseDraft.gherkinText,
+    }
+    setSavingCase(true)
+    const saved =
+      editingCaseId === NEW_CASE
+        ? await createTest(feature._id, payload)
+        : await updateTest(editingCaseId as string, payload)
+    setSavingCase(false)
+    if (!saved) return
+    setTests((prev) =>
+      editingCaseId === NEW_CASE
+        ? [saved, ...prev]
+        : prev.map((t) => (t._id === saved._id ? saved : t))
+    )
+    // A new case changes the feature's test count on the features grid.
+    if (editingCaseId === NEW_CASE && project) refreshFeatures(project._id)
+    cancelEditCase()
+  }
+
   async function handleDeleteTest(id: string) {
     if (await deleteTest(id)) {
       setTests((t) => t.filter((x) => x._id !== id))
+      if (editingCaseId === id) cancelEditCase()
     }
   }
 
@@ -357,9 +434,15 @@ export default function E2eQa() {
           <div className="mx-auto flex h-full w-full max-w-6xl flex-col overflow-hidden rounded-xl border bg-background shadow-2xl">
             <div className="flex items-center justify-between border-b px-4 py-3">
               <div className="flex items-center gap-2">
-                <Circle className="h-3 w-3 animate-pulse fill-red-500 text-red-500" />
+                {cloudRec.mode === "login" ? (
+                  <LogIn className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <Circle className="h-3 w-3 animate-pulse fill-red-500 text-red-500" />
+                )}
                 <span className="text-sm font-medium">
-                  Recording — click through your flow, then Finish
+                  {cloudRec.mode === "login"
+                    ? "Log in inside this browser, then click Save session"
+                    : "Recording — click through your flow, then Finish"}
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -369,8 +452,14 @@ export default function E2eQa() {
                   type="button"
                   disabled={finishingCloud}
                   onClick={() => {
-                    // Cancel: tear down without saving a spec.
-                    finishClientRecording(cloudRec.recordingId)
+                    // Cancel: tear the cloud browser down without saving. For a
+                    // login that's the same call — it just won't persist a
+                    // session, since nothing was confirmed.
+                    if (cloudRec.mode === "login") {
+                      finishCloudLogin(cloudRec.recordingId)
+                    } else {
+                      finishClientRecording(cloudRec.recordingId)
+                    }
                     setCloudRec(null)
                   }}
                 >
@@ -384,18 +473,22 @@ export default function E2eQa() {
                 >
                   {finishingCloud ? (
                     <>
-                      <Loader2 className="h-4 w-4 animate-spin" /> Generating…
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {cloudRec.mode === "login" ? "Saving…" : "Generating…"}
                     </>
                   ) : (
                     <>
-                      <CheckCircle2 className="h-4 w-4" /> Finish & generate
+                      <CheckCircle2 className="h-4 w-4" />
+                      {cloudRec.mode === "login"
+                        ? "Save session"
+                        : "Finish & generate"}
                     </>
                   )}
                 </Button>
               </div>
             </div>
             <iframe
-              title="Cloud recorder"
+              title={cloudRec.mode === "login" ? "Login capture" : "Cloud recorder"}
               src={cloudRec.liveViewUrl}
               className="h-full w-full flex-1 bg-white"
               sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
@@ -540,7 +633,7 @@ export default function E2eQa() {
                   >
                     {authing ? (
                       <>
-                        <Loader2 className="h-4 w-4 animate-spin" /> Waiting for login
+                        <Loader2 className="h-4 w-4 animate-spin" /> Opening browser
                       </>
                     ) : (
                       <>
@@ -674,16 +767,53 @@ export default function E2eQa() {
               <h2 className="text-lg font-medium">
                 Test cases {tests.length > 0 && `(${tests.length})`}
               </h2>
+              <Button
+                size="sm"
+                variant="outline"
+                type="button"
+                onClick={startNewCase}
+                disabled={editingCaseId !== null}
+                title="Write a test case by hand instead of generating it from a video"
+              >
+                <Plus className="h-4 w-4" /> Add test case
+              </Button>
             </div>
 
+            {/* Blank card at the top — the same editor used for edits. */}
+            {editingCaseId === NEW_CASE && caseDraft && (
+              <div className="rounded-lg border p-4 mb-3">
+                <TestCaseEditor
+                  draft={caseDraft}
+                  onChange={setCaseDraft}
+                  onSave={handleSaveCase}
+                  onCancel={cancelEditCase}
+                  saving={savingCase}
+                  isNew
+                />
+              </div>
+            )}
+
             {tests.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No test cases yet — upload a demo video to generate them.
-              </p>
+              editingCaseId === NEW_CASE ? null : (
+                <p className="text-sm text-muted-foreground">
+                  No test cases yet — upload a demo video to generate them, or
+                  add one by hand.
+                </p>
+              )
             ) : (
               <div className="flex flex-col gap-3">
                 {tests.map((t) => (
                   <div key={t._id} className="rounded-lg border p-4">
+                  {editingCaseId === t._id && caseDraft ? (
+                    <TestCaseEditor
+                      draft={caseDraft}
+                      onChange={setCaseDraft}
+                      onSave={handleSaveCase}
+                      onCancel={cancelEditCase}
+                      saving={savingCase}
+                    />
+                  ) : (
+                   <>
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <span
@@ -801,6 +931,14 @@ export default function E2eQa() {
                           </a>
                         )}
                         <button
+                          onClick={() => startEditCase(t)}
+                          disabled={editingCaseId !== null}
+                          className="text-muted-foreground hover:text-foreground disabled:opacity-40"
+                          title="Edit name, kind & Given/When/Then"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
                           onClick={() => handleDeleteTest(t._id)}
                           className="text-muted-foreground hover:text-red-600"
                           title="Delete test"
@@ -810,25 +948,37 @@ export default function E2eQa() {
                       </div>
                     </div>
 
+                    {/* Render the scenario as written when we have the raw
+                        text — that's the only view that keeps the real step
+                        order. Cases saved before gherkinText existed fall back
+                        to the grouped arrays. */}
                     <div className="mt-3 text-sm space-y-1.5 font-mono">
-                      {t.gherkin?.given?.map((g, i) => (
-                        <div key={`g${i}`}>
-                          <span className="text-emerald-600 font-semibold">Given </span>
-                          {g}
-                        </div>
-                      ))}
-                      {t.gherkin?.when?.map((w, i) => (
-                        <div key={`w${i}`}>
-                          <span className="text-blue-600 font-semibold">When </span>
-                          {w}
-                        </div>
-                      ))}
-                      {t.gherkin?.then?.map((th, i) => (
-                        <div key={`t${i}`}>
-                          <span className="text-amber-600 font-semibold">Then </span>
-                          {th}
-                        </div>
-                      ))}
+                      {t.gherkinText ? (
+                        t.gherkinText.split("\n").map((line, i) => (
+                          <GherkinLine key={i} line={line} />
+                        ))
+                      ) : (
+                        <>
+                          {t.gherkin?.given?.map((g, i) => (
+                            <div key={`g${i}`}>
+                              <span className="text-emerald-600 font-semibold">Given </span>
+                              {g}
+                            </div>
+                          ))}
+                          {t.gherkin?.when?.map((w, i) => (
+                            <div key={`w${i}`}>
+                              <span className="text-blue-600 font-semibold">When </span>
+                              {w}
+                            </div>
+                          ))}
+                          {t.gherkin?.then?.map((th, i) => (
+                            <div key={`t${i}`}>
+                              <span className="text-amber-600 font-semibold">Then </span>
+                              {th}
+                            </div>
+                          ))}
+                        </>
+                      )}
                     </div>
 
                     {t.specCode && (
@@ -877,6 +1027,8 @@ export default function E2eQa() {
                         </div>
                       </details>
                     )}
+                   </>
+                  )}
                   </div>
                 ))}
               </div>
@@ -884,6 +1036,168 @@ export default function E2eQa() {
           </>
         )}
       </main>
+    </div>
+  )
+}
+
+// --------------------------- Inline case editor ---------------------------
+// Sentinel for "the blank card at the top of the list" — lets one editor and
+// one draft serve both creating a case and editing an existing one.
+const NEW_CASE = "__new__"
+
+type TestDraft = {
+  name: string
+  kind: E2eTestKind
+  // The whole scenario as one block of text. Deliberately NOT three lists of
+  // steps: a real scenario interleaves them (When → Then → And → When …) and
+  // separate lists can't hold that order — and you can't paste into them.
+  gherkinText: string
+}
+
+const KINDS: E2eTestKind[] = ["smoke", "regression", "bughunt"]
+
+const GHERKIN_PLACEHOLDER = `Feature: Login
+Scenario: Wrong password shows an error
+  Given the user is on the login page
+  When they submit a wrong password
+  Then an error message is shown
+  And the password field is highlighted
+  When they fix the password
+  Then they land on the dashboard`
+
+function emptyDraft(): TestDraft {
+  return { name: "", kind: "regression", gherkinText: "" }
+}
+
+// Cases created before gherkinText existed only have the grouped arrays — turn
+// them back into text so the editor always opens on something editable.
+function draftFromTest(t: E2eTest): TestDraft {
+  return {
+    name: t.name,
+    kind: t.kind,
+    gherkinText: t.gherkinText || gherkinToText(t.gherkin),
+  }
+}
+
+function gherkinToText(g?: Gherkin): string {
+  if (!g) return ""
+  const lines: string[] = []
+  if (g.feature) lines.push(`Feature: ${g.feature}`)
+  if (g.scenario) lines.push(`Scenario: ${g.scenario}`)
+  g.given?.forEach((x) => lines.push(`  Given ${x}`))
+  g.when?.forEach((x) => lines.push(`  When ${x}`))
+  g.then?.forEach((x) => lines.push(`  Then ${x}`))
+  return lines.join("\n")
+}
+
+// One line of a saved scenario, with its leading keyword tinted. Purely
+// cosmetic — the line is shown exactly as stored, keyword included.
+const KEYWORD_COLOR: Record<string, string> = {
+  given: "text-emerald-600",
+  when: "text-blue-600",
+  then: "text-amber-600",
+  and: "text-muted-foreground",
+  but: "text-muted-foreground",
+  feature: "text-foreground",
+  scenario: "text-foreground",
+}
+
+function GherkinLine({ line }: { line: string }) {
+  const trimmed = line.trim()
+  if (!trimmed) return <div className="h-2" />
+  const m = trimmed.match(/^([a-zA-Z]+)(:?)(\s+|$)([\s\S]*)$/)
+  const color = m ? KEYWORD_COLOR[m[1].toLowerCase()] : undefined
+  if (!m || !color) return <div>{trimmed}</div>
+  return (
+    <div>
+      <span className={cn("font-semibold", color)}>
+        {m[1]}
+        {m[2]}{" "}
+      </span>
+      {m[4]}
+    </div>
+  )
+}
+
+// Name + kind + ONE textarea for the scenario. Module-level (not nested inside
+// E2eQa) so typing doesn't remount the inputs and steal focus on every
+// keystroke.
+function TestCaseEditor({
+  draft,
+  onChange,
+  onSave,
+  onCancel,
+  saving,
+  isNew = false,
+}: {
+  draft: TestDraft
+  onChange: (d: TestDraft) => void
+  onSave: () => void
+  onCancel: () => void
+  saving: boolean
+  isNew?: boolean
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <input
+          autoFocus
+          className="flex-1 rounded-md border px-3 py-2 text-sm"
+          placeholder="Test case name (e.g. Login with a wrong password)"
+          value={draft.name}
+          onChange={(e) => onChange({ ...draft, name: e.target.value })}
+        />
+        <select
+          className="rounded-md border px-2 py-2 text-sm"
+          value={draft.kind}
+          onChange={(e) =>
+            onChange({ ...draft, kind: e.target.value as E2eTestKind })
+          }
+        >
+          {KINDS.map((k) => (
+            <option key={k} value={k}>
+              {k}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <textarea
+        className="min-h-56 w-full resize-y rounded-md border px-3 py-2 font-mono text-sm leading-relaxed"
+        placeholder={GHERKIN_PLACEHOLDER}
+        spellCheck={false}
+        value={draft.gherkinText}
+        onChange={(e) => onChange({ ...draft, gherkinText: e.target.value })}
+      />
+      <p className="text-xs text-muted-foreground">
+        Paste or write the scenario as plain Gherkin — Given / When / Then /
+        And / But, in any order. It's stored exactly as you type it.
+      </p>
+
+      <div className="flex justify-end gap-2 pt-1">
+        <Button
+          size="sm"
+          variant="outline"
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+        >
+          Cancel
+        </Button>
+        <Button
+          size="sm"
+          type="button"
+          onClick={onSave}
+          disabled={saving || !draft.name.trim()}
+        >
+          {saving ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Save className="h-4 w-4" />
+          )}
+          {isNew ? "Create case" : "Save"}
+        </Button>
+      </div>
     </div>
   )
 }
