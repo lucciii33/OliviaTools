@@ -10,13 +10,18 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
+  KeyRound,
 } from "lucide-react"
 import { Sidebar } from "~/components/Sidebar"
 import { Button } from "~/components/ui/button"
 import { MethodBadge } from "~/components/MethodBadge"
 import { useAuth } from "~/context/AuthContext"
+import { QaConfigDialog } from "~/components/QaConfigDialog"
+import { ProjectAuthDialog } from "~/components/ProjectAuthDialog"
+import { EndpointVariables } from "~/components/EndpointVariables"
 import {
   useQaApi,
+  type ApiProject,
   type ApiSuite,
   type ApiTestCase,
   type SuiteRunResult,
@@ -44,6 +49,7 @@ export default function ApiTestsPage() {
     refineSuiteCase,
     generateSectionSuites,
     generateRepoSectionSuites,
+    listProjects,
     error,
   } = useQaApi()
 
@@ -53,6 +59,10 @@ export default function ApiTestsPage() {
   const [runs, setRuns] = useState<Record<string, SuiteRunResult>>({})
   const [runningId, setRunningId] = useState<string | null>(null)
   const [generatingSection, setGeneratingSection] = useState(false)
+  // Auth + global variables are edited with the SAME dialogs the docs and
+  // swagger pages use — a token typed here is the token those pages show.
+  const [authOpen, setAuthOpen] = useState(false)
+  const [project, setProject] = useState<ApiProject | null>(null)
 
   async function refresh() {
     setLoading(true)
@@ -70,6 +80,15 @@ export default function ApiTestsPage() {
     refresh()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, owner, repo])
+
+  // ProjectAuthDialog takes the whole project, so fetch it for that scope only.
+  useEffect(() => {
+    if (isRepo || !projectId) return
+    listProjects().then((ps) =>
+      setProject(ps.find((p) => p._id === projectId) || null)
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, isRepo])
 
   // section -> endpoint -> the suites of that endpoint
   const sections = useMemo(() => {
@@ -209,6 +228,16 @@ export default function ApiTestsPage() {
               <Button
                 size="sm"
                 variant="outline"
+                className="gap-1.5 border-white/15 bg-white/[0.03] hover:bg-white/[0.08] text-xs mr-2"
+                onClick={() => setAuthOpen(true)}
+                title="Base URL, auth and the global variables every test uses"
+              >
+                <KeyRound className="h-3.5 w-3.5 text-amber-400" />
+                Target &amp; auth
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
                 className="gap-1.5 border-white/15 bg-white/[0.03] hover:bg-white/[0.08] text-xs"
                 onClick={handleGenerateSection}
                 disabled={generatingSection}
@@ -238,6 +267,22 @@ export default function ApiTestsPage() {
               ))}
             </div>
           </>
+        )}
+        {isRepo && owner && repo && (
+          <QaConfigDialog
+            open={authOpen}
+            onOpenChange={setAuthOpen}
+            owner={owner}
+            repo={repo}
+          />
+        )}
+        {!isRepo && project && (
+          <ProjectAuthDialog
+            open={authOpen}
+            onOpenChange={setAuthOpen}
+            project={project}
+            onSaved={setProject}
+          />
         )}
       </main>
     </div>
@@ -295,6 +340,10 @@ function EndpointCard({
 
       {open && (
         <div className="px-4 pb-4 pl-11 space-y-4">
+          <EndpointVariables
+            docId={String(suites[0]?.docId || "")}
+            defaultOpen
+          />
           {suites.map((suite) => (
             <SuiteBlock
               key={suite._id}

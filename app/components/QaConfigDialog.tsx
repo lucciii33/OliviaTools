@@ -8,6 +8,8 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog"
 import { Button } from "~/components/ui/button"
+import { EndpointVariables } from "./EndpointVariables"
+import type { Doc } from "~/api/docsApi"
 import { Input } from "~/components/ui/input"
 import { useQaApi, type QaAuthType, type QaConfig } from "~/api/qaApi"
 
@@ -16,6 +18,10 @@ interface QaConfigDialogProps {
   onOpenChange: (open: boolean) => void
   owner: string
   repo: string
+  /** When the dialog is opened from one endpoint, its own variables show too. */
+  docId?: string
+  /** The endpoint itself, so its request body can be edited in the same popup. */
+  endpointDoc?: Doc
   onSaved?: (config: QaConfig) => void
 }
 
@@ -38,6 +44,8 @@ export function QaConfigDialog({
   owner,
   repo,
   onSaved,
+  docId,
+  endpointDoc,
 }: QaConfigDialogProps) {
   const { getConfig, saveConfig, error } = useQaApi()
   const [loadingExisting, setLoadingExisting] = useState(false)
@@ -306,7 +314,8 @@ export function QaConfigDialog({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-xs text-white/60">
-                  Path variables <span className="text-white/30">(optional)</span>
+                  Global variables{" "}
+                  <span className="text-white/30">(every endpoint)</span>
                 </label>
                 <Button
                   type="button"
@@ -355,6 +364,23 @@ export function QaConfigDialog({
                 </div>
               )}
             </div>
+
+            {/* Endpoint-level values live in the same popup as the global ones,
+                so "why is this one 401" is answered without leaving the dialog.
+                Only shown when the dialog was opened from a specific endpoint. */}
+            {docId && (
+              <div className="space-y-2 border-t border-white/10 pt-4">
+                <label className="text-xs text-white/60">
+                  Endpoint variables{" "}
+                  <span className="text-white/30">(this endpoint only)</span>
+                </label>
+                <p className="text-xs text-white/30">
+                  Override a global value, or add a token / api key / id that
+                  only this endpoint needs. These win over the global ones.
+                </p>
+                <EndpointVariables docId={docId} defaultOpen />
+              </div>
+            )}
 
             {error && (
               <div className="flex items-start gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-md px-3 py-2">

@@ -235,6 +235,31 @@ export interface SectionGenerateResult {
   endpoints: number
 }
 
+// ---- Variables an endpoint resolves at run time ----
+// The global set (repo config or project) applies to every endpoint; the
+// endpoint's own entries override it. Both Run QA and a saved test run resolve
+// through the same merge, so what you set here is what either one sends.
+
+export interface ResolvedVariable {
+  key: string
+  value: string
+  secret: boolean
+  overridden?: boolean
+}
+
+export interface DocVariables {
+  scope: "project" | "repo"
+  baseUrl: string
+  authType: string
+  // The endpoint itself, so the whole per-endpoint block (variables + request
+  // body) can be rendered from a docId alone.
+  method: string
+  path: string
+  exampleBody: unknown
+  global: ResolvedVariable[]
+  endpoint: ResolvedVariable[]
+}
+
 export function useQaApi() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -726,6 +751,33 @@ export function useQaApi() {
     return true
   }
 
+  const getDocVariables = async (docId: string): Promise<DocVariables | null> => {
+    setError(null)
+    const res = await apiFetch(`/api/qa/docs/${docId}/variables`)
+    if (!res.ok) {
+      setError(`Failed to load variables (${res.status})`)
+      return null
+    }
+    return (await res.json()) as DocVariables
+  }
+
+  const saveDocVariables = async (
+    docId: string,
+    variables: { key: string; value: string; secret: boolean }[]
+  ): Promise<ResolvedVariable[] | null> => {
+    setError(null)
+    const res = await apiFetch(`/api/qa/docs/${docId}/variables`, {
+      method: "PUT",
+      body: JSON.stringify({ variables }),
+    })
+    if (!res.ok) {
+      const body = await res.text()
+      setError(safeMessage(body) || `Could not save variables (${res.status})`)
+      return null
+    }
+    return ((await res.json()) as { variables: ResolvedVariable[] }).variables
+  }
+
   return {
     loading,
     error,
@@ -758,6 +810,8 @@ export function useQaApi() {
     runSuite,
     refineSuiteCase,
     deleteSuite,
+    getDocVariables,
+    saveDocVariables,
   }
 }
 

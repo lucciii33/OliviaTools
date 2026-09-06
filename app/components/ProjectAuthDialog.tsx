@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog"
 import { Button } from "~/components/ui/button"
+import { EndpointVariables } from "./EndpointVariables"
 import { Input } from "~/components/ui/input"
 import {
   useQaApi,
@@ -22,6 +23,8 @@ interface Props {
   project: ApiProject
   onSaved?: (p: ApiProject) => void
   suggestedVariables?: { key: string; value: string; secret: boolean }[]
+  /** When opened from one endpoint, its own variables show under the global ones. */
+  docId?: string
 }
 
 const AUTH_LABEL: Record<QaAuthType, string> = {
@@ -34,7 +37,7 @@ const AUTH_LABEL: Record<QaAuthType, string> = {
 }
 
 // baseUrl + auth TYPE come from the spec; the user only supplies the secret.
-export function ProjectAuthDialog({ open, onOpenChange, project, onSaved, suggestedVariables }: Props) {
+export function ProjectAuthDialog({ open, onOpenChange, project, onSaved, suggestedVariables, docId }: Props) {
   const { saveProjectAuth, loading, error } = useQaApi()
   const [baseUrl, setBaseUrl] = useState("")
   const [authType, setAuthType] = useState<QaAuthType>("none")
@@ -201,7 +204,7 @@ grant_type  = client_credentials`}
           <div className="pt-1 border-t border-white/10">
             <div className="flex items-center justify-between mb-1">
               <label className="text-xs text-white/50">
-                Environment variables{" "}
+                Global variables{" "}
                 <span className="text-white/30">
                   (fill {"{{key}}"} & path params like {"{userId}"})
                 </span>
@@ -258,6 +261,22 @@ grant_type  = client_credentials`}
               ))}
             </div>
           </div>
+
+          {/* Endpoint-level values, in the same popup as the global ones. Only
+              rendered when the dialog was opened from a specific endpoint. */}
+          {docId && (
+            <div className="pt-1 border-t border-white/10">
+              <label className="text-xs text-white/50">
+                Endpoint variables{" "}
+                <span className="text-white/30">(this endpoint only)</span>
+              </label>
+              <p className="text-[11px] text-white/30 mb-1.5">
+                Override a global value, or add a token / api key / id only this
+                endpoint needs. These win over the global ones.
+              </p>
+              <EndpointVariables docId={docId} defaultOpen />
+            </div>
+          )}
 
           {error && <p className="text-sm text-red-400">{error}</p>}
         </div>

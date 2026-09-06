@@ -30,6 +30,7 @@ import {
 } from "~/components/ui/tabs"
 import { MethodBadge } from "./MethodBadge"
 import { QaConfigDialog } from "./QaConfigDialog"
+import { EndpointVariables } from "./EndpointVariables"
 import { QaRunDialog } from "./QaRunDialog"
 import { QaRunView } from "./QaRunView"
 import {
@@ -46,7 +47,9 @@ interface DocCardProps {
 
 export function DocCard({ doc, onDelete }: DocCardProps) {
   const [expanded, setExpanded] = useState(false)
-  const [tab, setTab] = useState<"details" | "history">("details")
+  const [tab, setTab] = useState<"details" | "history" | "variables">(
+    "details"
+  )
   const [configOpen, setConfigOpen] = useState(false)
   const [runOpen, setRunOpen] = useState(false)
   const [checkingConfig, setCheckingConfig] = useState(false)
@@ -157,16 +160,14 @@ export function DocCard({ doc, onDelete }: DocCardProps) {
               >
                 <Settings className="h-4 w-4" />
               </Button>
-              {hasDetails && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-white/50 hover:text-white hover:bg-white/10"
-                  onClick={() => setExpanded((v) => !v)}
-                >
-                  {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                </Button>
-              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-white/50 hover:text-white hover:bg-white/10"
+                onClick={() => setExpanded((v) => !v)}
+              >
+                {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"
@@ -182,11 +183,13 @@ export function DocCard({ doc, onDelete }: DocCardProps) {
           )}
         </CardHeader>
 
-        {expanded && hasDetails && (
+        {expanded && (
           <CardContent className="pt-0 border-t border-white/10 mt-2">
             <Tabs
               value={tab}
-              onValueChange={(v) => setTab(v as "details" | "history")}
+              onValueChange={(v) =>
+                setTab(v as "details" | "history" | "variables")
+              }
               className="mt-4"
             >
               <TabsList variant="line" className="border-b border-white/10 w-full justify-start gap-4 h-auto">
@@ -195,6 +198,9 @@ export function DocCard({ doc, onDelete }: DocCardProps) {
                 </TabsTrigger>
                 <TabsTrigger value="history" className="text-white/60 data-active:text-white">
                   QA History
+                </TabsTrigger>
+                <TabsTrigger value="variables" className="text-white/60 data-active:text-white">
+                  Variables
                 </TabsTrigger>
               </TabsList>
 
@@ -243,6 +249,12 @@ export function DocCard({ doc, onDelete }: DocCardProps) {
                 )}
               </TabsContent>
 
+              <TabsContent value="variables" className="pt-4">
+                {/* Same component the tests page uses, so per-endpoint
+                    variables look and behave identically in both places. */}
+                <EndpointVariables docId={doc._id} defaultOpen />
+              </TabsContent>
+
               <TabsContent value="history" className="pt-4">
                 <QaHistoryTab
                   docId={doc._id}
@@ -264,6 +276,8 @@ export function DocCard({ doc, onDelete }: DocCardProps) {
         }}
         owner={doc.owner}
         repo={doc.repo}
+        docId={doc._id}
+        endpointDoc={doc}
         onSaved={() => {
           if (pendingRun) {
             setPendingRun(false)
