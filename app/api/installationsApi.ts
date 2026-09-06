@@ -11,6 +11,16 @@ export interface PendingRequest {
   linkable: boolean
 }
 
+// An installation nobody owns, on a GitHub account this user belongs to. These
+// come from installs done straight on GitHub, where nothing identifies the
+// requester — claiming is how they reach a workspace.
+export interface UnclaimedInstallation {
+  installationId: number
+  owner: string
+  accountType?: string
+  repos: string[]
+}
+
 export interface Installation {
   installationId: number
   owner: string
@@ -28,6 +38,9 @@ export function useInstallationsApi() {
   const [disconnecting, setDisconnecting] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [pending, setPending] = useState<PendingRequest[]>([])
+  const [unclaimed, setUnclaimed] = useState<UnclaimedInstallation[]>([])
+  const [needsGithubConnect, setNeedsGithubConnect] = useState(false)
+  const [claiming, setClaiming] = useState<number | null>(null)
 
   const getInstallations = async () => {
     setLoading(true)
@@ -56,6 +69,38 @@ export function useInstallationsApi() {
     } catch {
       // A pending list that fails to load must not blank the repo list next to
       // it — leave whatever was there and stay quiet.
+    }
+  }
+
+  const getUnclaimed = async () => {
+    try {
+      const res = await fetch(`${BASE_URL}/api/installations/unclaimed`, {
+        headers: { Authorization: `Bearer ${getAuthToken()}` },
+      })
+      if (!res.ok) throw new Error("Request failed")
+      const data = await res.json()
+      setUnclaimed(data.installations ?? [])
+      setNeedsGithubConnect(Boolean(data.needsGithubConnect))
+    } catch {
+      // Same reasoning as the pending list: never let this blank the sidebar.
+    }
+  }
+
+  const claimInstallation = async (installationId: number) => {
+    setClaiming(installationId)
+    try {
+      const res = await fetch(
+        `${BASE_URL}/api/installations/${installationId}/claim`,
+        { method: "POST", headers: { Authorization: `Bearer ${getAuthToken()}` } }
+      )
+      if (!res.ok) throw new Error("Request failed")
+      await Promise.all([getInstallations(), getUnclaimed()])
+      return true
+    } catch {
+      setError("Could not claim this installation")
+      return false
+    } finally {
+      setClaiming(null)
     }
   }
 
@@ -108,6 +153,11 @@ export function useInstallationsApi() {
     getInstallations,
     pending,
     getPendingRequests,
+    unclaimed,
+    needsGithubConnect,
+    getUnclaimed,
+    claimInstallation,
+    claiming,
     syncInstallations,
     syncing,
     disconnectInstallation,

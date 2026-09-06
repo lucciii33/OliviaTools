@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { AlertCircle, ArrowLeft, BookOpen, Clock, FileCode, FlaskConical, Loader2, Menu, RefreshCw, Settings, TerminalSquare } from "lucide-react"
+import { AlertCircle, ArrowLeft, BookOpen, Clock, FileCode, FlaskConical, Loader2, Menu, Plus, RefreshCw, Settings, TerminalSquare } from "lucide-react"
 import { Link, useLocation } from "react-router"
 import { Button } from "~/components/ui/button"
 import {
@@ -30,6 +30,10 @@ function SidebarContent() {
     syncing,
     pending,
     getPendingRequests,
+    unclaimed,
+    getUnclaimed,
+    claimInstallation,
+    claiming,
   } = useInstallationsApi()
   const isAllActive = location.pathname === "/docs"
   const isWorkspaceActive = location.pathname === "/workspace"
@@ -41,6 +45,7 @@ function SidebarContent() {
   useEffect(() => {
     getInstallations()
     getPendingRequests()
+    getUnclaimed()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -145,12 +150,40 @@ function SidebarContent() {
             <span>Could not load repositories.</span>
           </div>
         )}
-        {!loading && !error && installations.length === 0 && pending.length === 0 && (
+        {!loading && !error && installations.length === 0 &&
+          pending.length === 0 &&
+          unclaimed.length === 0 && (
           <p className="px-2 py-2 text-xs text-white/35">No repositories connected.</p>
         )}
         {/* A request an owner has not acted on yet. Without this the sidebar
             looked identical whether you had asked for access or never asked at
             all, which is what made people re-request. */}
+        {/* Installed on GitHub, owned by nobody here. Verified server-side as an
+            org this user actually belongs to before it is ever offered. */}
+        {unclaimed.map((u) => (
+          <div
+            key={u.installationId}
+            data-testid="sidebar-unclaimed-install"
+            className="mx-1 my-1 rounded-md bg-blue-500/10 px-2 py-2"
+          >
+            <p className="text-xs text-blue-200">
+              <span className="font-medium">{u.owner}</span> is connected on
+              GitHub but not linked to this workspace.
+            </p>
+            <p className="mt-0.5 text-[11px] text-blue-200/60">
+              {u.repos.length} repo{u.repos.length === 1 ? "" : "s"}
+            </p>
+            <button
+              type="button"
+              onClick={() => claimInstallation(u.installationId)}
+              disabled={claiming === u.installationId}
+              className="mt-1.5 inline-flex items-center gap-1 rounded bg-blue-500/20 px-2 py-1 text-[11px] text-blue-100 hover:bg-blue-500/30 disabled:opacity-50"
+            >
+              <Plus className="h-3 w-3" />
+              {claiming === u.installationId ? "Adding…" : "Add to this workspace"}
+            </button>
+          </div>
+        ))}
         {pending.map((p) => (
           <div
             key={p.id}
