@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { AlertCircle, ArrowLeft, BookOpen, Clock, FileCode, FlaskConical, Loader2, Menu, RefreshCw, Settings, TerminalSquare } from "lucide-react"
+import { AlertCircle, ArrowLeft, BookOpen, FileCode, FlaskConical, Loader2, Menu, RefreshCw, Settings, TerminalSquare } from "lucide-react"
 import { Link, useLocation } from "react-router"
 import { Button } from "~/components/ui/button"
 import {
@@ -21,16 +21,8 @@ const itemActive = "bg-white/10 text-white"
 function SidebarContent() {
   const { user, logout } = useAuth()
   const location = useLocation()
-  const {
-    installations,
-    loading,
-    error,
-    getInstallations,
-    syncInstallations,
-    syncing,
-    pending,
-    getPendingRequests,
-  } = useInstallationsApi()
+  const { installations, loading, error, getInstallations, syncInstallations, syncing } =
+    useInstallationsApi()
   const isAllActive = location.pathname === "/docs"
   const isWorkspaceActive = location.pathname === "/workspace"
   const isSwaggerActive = location.pathname === "/swagger-qa"
@@ -40,7 +32,6 @@ function SidebarContent() {
 
   useEffect(() => {
     getInstallations()
-    getPendingRequests()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -145,29 +136,9 @@ function SidebarContent() {
             <span>Could not load repositories.</span>
           </div>
         )}
-        {!loading && !error && installations.length === 0 && pending.length === 0 && (
+        {!loading && !error && installations.length === 0 && (
           <p className="px-2 py-2 text-xs text-white/35">No repositories connected.</p>
         )}
-        {/* A request an owner has not acted on yet. Without this the sidebar
-            looked identical whether you had asked for access or never asked at
-            all, which is what made people re-request. */}
-        {pending.map((p) => (
-          <div
-            key={p.id}
-            data-testid="sidebar-pending-request"
-            className="mx-1 my-1 rounded-md bg-amber-500/10 px-2 py-2"
-          >
-            <span className="flex items-center gap-2 text-xs text-amber-300">
-              <Clock className="h-3.5 w-3.5 shrink-0" />
-              Waiting for owner approval
-            </span>
-            <p className="mt-1 text-[11px] leading-snug text-amber-200/60">
-              {p.linkable
-                ? "Your request was sent. The repository appears here automatically once it is approved."
-                : "Connect GitHub again so we can link the approval to your account."}
-            </p>
-          </div>
-        ))}
         {installations.map((i) => {
           const path = `/docs/${i.owner}/${i.repo}`
           const active = location.pathname === path
