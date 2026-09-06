@@ -1,6 +1,16 @@
 import { useState } from "react"
 import { getAuthToken } from "~/auth"
 
+// An install request waiting on an organisation owner. GitHub does not tell us
+// which org was picked on a pending request, so there is no name to show — only
+// when it was asked for.
+export interface PendingRequest {
+  id: string
+  requestedAt: string
+  githubUsername: string
+  linkable: boolean
+}
+
 export interface Installation {
   installationId: number
   owner: string
@@ -17,6 +27,7 @@ export function useInstallationsApi() {
   const [error, setError] = useState<string | null>(null)
   const [disconnecting, setDisconnecting] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [pending, setPending] = useState<PendingRequest[]>([])
 
   const getInstallations = async () => {
     setLoading(true)
@@ -32,6 +43,19 @@ export function useInstallationsApi() {
       setError("Error loading installations")
     } finally {
       setLoading(false)
+    }
+  }
+
+  const getPendingRequests = async () => {
+    try {
+      const res = await fetch(`${BASE_URL}/api/installations/pending`, {
+        headers: { Authorization: `Bearer ${getAuthToken()}` },
+      })
+      if (!res.ok) throw new Error("Request failed")
+      setPending(await res.json())
+    } catch {
+      // A pending list that fails to load must not blank the repo list next to
+      // it — leave whatever was there and stay quiet.
     }
   }
 
@@ -82,6 +106,8 @@ export function useInstallationsApi() {
     loading,
     error,
     getInstallations,
+    pending,
+    getPendingRequests,
     syncInstallations,
     syncing,
     disconnectInstallation,
