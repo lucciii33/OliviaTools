@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { AlertCircle, ArrowLeft, BookOpen, FileCode, FlaskConical, Loader2, Menu, Settings, TerminalSquare } from "lucide-react"
+import { AlertCircle, ArrowLeft, BookOpen, FileCode, FlaskConical, Loader2, Menu, RefreshCw, Settings, TerminalSquare } from "lucide-react"
 import { Link, useLocation } from "react-router"
 import { Button } from "~/components/ui/button"
 import {
@@ -21,7 +21,8 @@ const itemActive = "bg-white/10 text-white"
 function SidebarContent() {
   const { user, logout } = useAuth()
   const location = useLocation()
-  const { installations, loading, error, getInstallations } = useInstallationsApi()
+  const { installations, loading, error, getInstallations, syncInstallations, syncing } =
+    useInstallationsApi()
   const isAllActive = location.pathname === "/docs"
   const isWorkspaceActive = location.pathname === "/workspace"
   const isSwaggerActive = location.pathname === "/swagger-qa"
@@ -94,9 +95,24 @@ function SidebarContent() {
           </span>
         </Link>
 
-        <p className="text-xs text-white/30 uppercase tracking-wider px-2 mb-2">
-          Repositories
-        </p>
+        <div className="flex items-center justify-between px-2 mb-2">
+          <p className="text-xs text-white/30 uppercase tracking-wider">
+            Repositories
+          </p>
+          {/* Escape hatch for a repo that was approved on GitHub but never
+              showed up here (a webhook that never landed). */}
+          <button
+            type="button"
+            onClick={() => syncInstallations()}
+            disabled={syncing}
+            data-testid="sidebar-refresh-repos"
+            title="Refresh repositories from GitHub"
+            aria-label="Refresh repositories from GitHub"
+            className="text-white/30 hover:text-white/70 disabled:opacity-50 transition-colors"
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} />
+          </button>
+        </div>
         <Link
           to="/docs"
           className={cn(itemBase, isAllActive ? itemActive : itemIdle)}

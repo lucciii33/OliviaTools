@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router"
-import { ArrowLeft, Loader2, RefreshCw, Rocket } from "lucide-react"
+import { ArrowLeft, Loader2, RefreshCw, Rocket, FlaskConical } from "lucide-react"
 import { Button } from "~/components/ui/button"
 import { Sidebar } from "~/components/Sidebar"
 import { DocCard } from "~/components/DocCard"
@@ -63,6 +63,20 @@ export default function DocsRepo() {
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {/* Always reachable: the saved smoke/regression suites for this repo,
+                grouped by section. Without a fixed entry point the tests page
+                could only be reached right after generating something. */}
+            <Link to={`/api-tests/repo/${owner}/${repo}`}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10 gap-1.5"
+                title="See every saved test for this repo, by section"
+              >
+                <FlaskConical className="h-3.5 w-3.5" />
+                Tests
+              </Button>
+            </Link>
             <Button
               size="sm"
               className="bg-blue-600 hover:bg-blue-500 text-white gap-1.5"

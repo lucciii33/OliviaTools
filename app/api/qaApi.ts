@@ -167,6 +167,74 @@ export interface SpecCandidate {
   size: number
 }
 
+// ---- Saved test suites (smoke / regression) ----
+// Generated per endpoint and KEPT, so they can be re-run later and drift shows
+// up as a regression. `covers` is the plain sentence shown in the tests page.
+
+export interface ApiTestCase {
+  _id: string
+  name: string
+  covers: string
+  category: string
+  method: string
+  path: string
+  headers: Record<string, string> | null
+  body: unknown
+  expectedStatus: number[]
+  assertions: string[]
+  baseline?: { status: number | null; bodyKeys: string[]; recordedAt: string | null }
+}
+
+export interface ApiSuite {
+  _id: string
+  projectId: string
+  docId: string
+  section: string
+  // Same union as Doc["method"] so MethodBadge accepts it directly.
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
+  path: string
+  kind: "smoke" | "regression"
+  cases: ApiTestCase[]
+  lastRun?: {
+    at: string | null
+    passed: number
+    failed: number
+    regressions: number
+  }
+}
+
+export interface SuiteAssertionResult {
+  assertion: string
+  passed: boolean
+  reason: string
+}
+
+export interface SuiteCaseResult {
+  caseId: string
+  name: string
+  covers: string
+  category: string
+  passed: boolean
+  isRegression: boolean
+  status: number
+  expectedStatus: number[]
+  durationMs: number
+  error: string | null
+  assertions: SuiteAssertionResult[]
+  regressionDetail: string
+}
+
+export interface SuiteRunResult {
+  summary: { total: number; passed: number; failed: number; regressions: number }
+  results: SuiteCaseResult[]
+}
+
+export interface SectionGenerateResult {
+  created: { docId: string; kind: string; cases: number }[]
+  failed: { docId: string; endpoint: string; kind: string; error: string }[]
+  endpoints: number
+}
+
 export function useQaApi() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -503,6 +571,161 @@ export function useQaApi() {
     return (await res.json()) as SuiteRun
   }
 
+  // ---- Saved test suites ----
+
+  // "Create test" on an endpoint row. No kind → generates smoke AND regression.
+  const generateSuites = async (
+    docId: string,
+    kind?: "smoke" | "regression"
+  ): Promise<ApiSuite[] | null> => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await apiFetch(`/api/qa/docs/${docId}/suites`, {
+        method: "POST",
+        body: JSON.stringify(kind ? { kind } : {}),
+      })
+      if (!res.ok) {
+        const body = await res.text()
+        setError(safeMessage(body) || `Could not create tests (${res.status})`)
+        return null
+      }
+      return ((await res.json()) as { suites: ApiSuite[] }).suites
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create tests")
+      return null
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Same, for every endpoint of a section. Slow — one model call per endpoint
+  // per kind — and reports partial failures instead of losing the batch.
+  const generateSectionSuites = async (
+    projectId: string,
+    section: string
+  ): Promise<SectionGenerateResult | null> => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await apiFetch(
+        `/api/qa/projects/${projectId}/sections/${encodeURIComponent(section)}/suites`,
+        { method: "POST", body: JSON.stringify({}) }
+      )
+      if (!res.ok) {
+        const body = await res.text()
+        setError(safeMessage(body) || `Could not create tests (${res.status})`)
+        return null
+      }
+      return (await res.json()) as SectionGenerateResult
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create tests")
+      return null
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const listSuites = async (projectId: string): Promise<ApiSuite[]> => {
+    setError(null)
+    const res = await apiFetch(`/api/qa/projects/${projectId}/suites`)
+    if (!res.ok) {
+      setError(`Failed to load tests (${res.status})`)
+      return []
+    }
+    return (await res.json()) as ApiSuite[]
+  }
+
+  // Same two, for endpoints that came from a connected GitHub repo. Those have
+  // owner/repo instead of a projectId.
+  const listRepoSuites = async (
+    owner: string,
+    repo: string
+  ): Promise<ApiSuite[]> => {
+    setError(null)
+    const res = await apiFetch(`/api/qa/repos/${owner}/${repo}/suites`)
+    if (!res.ok) {
+      setError(`Failed to load tests (${res.status})`)
+      return []
+    }
+    return (await res.json()) as ApiSuite[]
+  }
+
+  const generateRepoSectionSuites = async (
+    owner: string,
+    repo: string,
+    section: string
+  ): Promise<SectionGenerateResult | null> => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await apiFetch(
+        `/api/qa/repos/${owner}/${repo}/sections/${encodeURIComponent(section)}/suites`,
+        { method: "POST", body: JSON.stringify({}) }
+      )
+      if (!res.ok) {
+        const body = await res.text()
+        setError(safeMessage(body) || `Could not create tests (${res.status})`)
+        return null
+      }
+      return (await res.json()) as SectionGenerateResult
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create tests")
+      return null
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const runSuite = async (suiteId: string): Promise<SuiteRunResult | null> => {
+    setError(null)
+    try {
+      const res = await apiFetch(`/api/qa/suites/${suiteId}/run`, { method: "POST" })
+      if (!res.ok) {
+        const body = await res.text()
+        setError(safeMessage(body) || `Run failed (${res.status})`)
+        return null
+      }
+      return (await res.json()) as SuiteRunResult
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Run failed")
+      return null
+    }
+  }
+
+  // Change what one test covers, from a plain-language instruction.
+  const refineSuiteCase = async (
+    suiteId: string,
+    caseId: string,
+    instruction: string
+  ): Promise<ApiTestCase | null> => {
+    setError(null)
+    try {
+      const res = await apiFetch(`/api/qa/suites/${suiteId}/cases/${caseId}/refine`, {
+        method: "POST",
+        body: JSON.stringify({ instruction }),
+      })
+      if (!res.ok) {
+        const body = await res.text()
+        setError(safeMessage(body) || `Could not update the test (${res.status})`)
+        return null
+      }
+      return ((await res.json()) as { case: ApiTestCase }).case
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update the test")
+      return null
+    }
+  }
+
+  const deleteSuite = async (suiteId: string): Promise<boolean> => {
+    const res = await apiFetch(`/api/qa/suites/${suiteId}`, { method: "DELETE" })
+    if (!res.ok) {
+      setError(`Could not delete (${res.status})`)
+      return false
+    }
+    return true
+  }
+
   return {
     loading,
     error,
@@ -527,5 +750,22 @@ export function useQaApi() {
     runSuiteQa,
     getSuiteRuns,
     getSuiteRun,
+    generateSuites,
+    generateSectionSuites,
+    listSuites,
+    listRepoSuites,
+    generateRepoSectionSuites,
+    runSuite,
+    refineSuiteCase,
+    deleteSuite,
+  }
+}
+
+// The backend answers errors as {message}; show that sentence, not raw JSON.
+function safeMessage(text: string): string {
+  try {
+    return JSON.parse(text)?.message || ""
+  } catch {
+    return text
   }
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { useNavigate } from "react-router"
+import { useNavigate, Link } from "react-router"
 import {
   ArrowLeft,
   Check,
@@ -17,6 +17,7 @@ import {
   Settings2,
   Trash2,
   X,
+  FlaskConical,
 } from "lucide-react"
 import { Button } from "~/components/ui/button"
 import { Sidebar } from "~/components/Sidebar"
@@ -529,6 +530,19 @@ export default function SwaggerQa() {
                     {allProgress.done}/{allProgress.total} sections…
                   </span>
                 )}
+                {/* Always available: the saved smoke/regression suites for this
+                    API. Without this the tests page had no entry point at all. */}
+                <Link to={`/api-tests/${project._id}`}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10 gap-1.5"
+                    title="See every saved test for this API, by section"
+                  >
+                    <FlaskConical className="h-3.5 w-3.5" />
+                    Tests
+                  </Button>
+                </Link>
                 {project.source === "github" && project.github?.specPath && (
                   <Button
                     size="sm"
@@ -618,6 +632,7 @@ export default function SwaggerQa() {
               <SectionCard
                 key={name}
                 section={name}
+                projectId={project._id}
                 docs={secDocs}
                 canRun={Boolean(project.baseUrl)}
                 suiteRun={suiteRuns[name] ?? null}
@@ -670,6 +685,7 @@ function downloadJson(data: unknown, filename: string) {
 
 function SectionCard({
   section,
+  projectId,
   docs,
   canRun,
   suiteRun,
@@ -679,6 +695,7 @@ function SectionCard({
   onRunSuite,
 }: {
   section: string
+  projectId: string
   docs: Doc[]
   canRun: boolean
   suiteRun: SuiteRun | null
@@ -718,6 +735,7 @@ function SectionCard({
             <Download className="h-3.5 w-3.5" />
             Postman
           </Button>
+          <SectionCreateTests section={section} projectId={projectId} count={docs.length} />
           <Button
             size="sm"
             className="bg-violet-600/90 hover:bg-violet-500 text-white gap-1.5"
@@ -765,11 +783,73 @@ function SectionCard({
 
 // One endpoint: expand to read its docs (request + response), see saved bugs
 // (mark done / delete), or Run QA on it.
+// Generate smoke + regression for every endpoint of a section in one go. Slow by
+// nature (a model call per endpoint per kind), so it reports partial failures
+// rather than pretending the whole batch succeeded.
+function SectionCreateTests({
+  section,
+  projectId,
+  count,
+}: {
+  section: string
+  projectId: string
+  count: number
+}) {
+  const { generateSectionSuites } = useQaApi()
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState<{ created: number; failed: number } | null>(
+    null
+  )
+
+  return (
+    <div className="flex items-center gap-2">
+      <Button
+        size="sm"
+        variant="outline"
+        className="border-white/15 text-white/80 hover:bg-white/10 gap-1.5"
+        onClick={async () => {
+          setBusy(true)
+          const res = await generateSectionSuites(projectId, section)
+          setBusy(false)
+          if (res) {
+            setDone({ created: res.created.length, failed: res.failed.length })
+          }
+        }}
+        disabled={busy}
+        title={`Generate smoke + regression tests for all ${count} endpoints in ${section}`}
+      >
+        {busy ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <FlaskConical className="h-3.5 w-3.5" />
+        )}
+        Create tests
+      </Button>
+      {done && (
+        <Link
+          to={`/api-tests/${projectId}`}
+          className="text-[11px] text-emerald-400 hover:underline"
+        >
+          {done.created} created
+          {done.failed > 0 && (
+            <span className="text-amber-400"> · {done.failed} failed</span>
+          )}
+          {" → view"}
+        </Link>
+      )}
+    </div>
+  )
+}
+
 function EndpointRow({ doc, canRun }: { doc: Doc; canRun: boolean }) {
-  const { runQa, getBugs, setBugStatus, deleteBug, getRuns, getRun } =
+  const { runQa, getBugs, setBugStatus, deleteBug, getRuns, getRun, generateSuites } =
     useQaApi()
   const [open, setOpen] = useState(false)
   const [running, setRunning] = useState(false)
+  // "Create test" saves a smoke + a regression suite for this endpoint. Unlike
+  // Run QA (a one-off bug hunt) these are kept and re-run from the tests page.
+  const [creatingTests, setCreatingTests] = useState(false)
+  const [createdTests, setCreatedTests] = useState(0)
   const [run, setRun] = useState<QaRun | null>(null)
   const [bugs, setBugs] = useState<BugRecord[]>([])
   const [bugsLoaded, setBugsLoaded] = useState(false)
@@ -854,6 +934,28 @@ function EndpointRow({ doc, canRun }: { doc: Doc; canRun: boolean }) {
             {openBugs} bug{openBugs === 1 ? "" : "s"}
           </span>
         )}
+        <Button
+          size="sm"
+          variant="outline"
+          className="border-white/15 text-white/80 hover:bg-white/10 gap-1.5 shrink-0"
+          onClick={async () => {
+            setCreatingTests(true)
+            const suites = await generateSuites(doc._id)
+            setCreatingTests(false)
+            if (suites) {
+              setCreatedTests(suites.reduce((n, x) => n + x.cases.length, 0))
+            }
+          }}
+          disabled={creatingTests}
+          title="Generate smoke + regression tests for this endpoint and save them"
+        >
+          {creatingTests ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <FlaskConical className="h-3.5 w-3.5" />
+          )}
+          {createdTests > 0 ? `${createdTests} tests` : "Create test"}
+        </Button>
         <Button
           size="sm"
           className="bg-red-600/90 hover:bg-red-500 text-white gap-1.5 shrink-0"

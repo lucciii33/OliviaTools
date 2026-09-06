@@ -1016,6 +1016,19 @@ export default function E2eQa() {
                                 <span className="text-muted-foreground">
                                   {(h.durationMs / 1000).toFixed(1)}s
                                 </span>
+                                {h.traceUrl && (
+                                  // Playwright trace for this failed attempt:
+                                  // DOM snapshots, per-step screenshots, network.
+                                  // Downloads a .zip — open it at trace.playwright.dev.
+                                  <a
+                                    href={h.traceUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="underline underline-offset-2 text-muted-foreground hover:text-foreground"
+                                  >
+                                    trace
+                                  </a>
+                                )}
                               </div>
                               {!h.passed && h.error && (
                                 <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap text-[11px] text-red-700">

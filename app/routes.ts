@@ -26,6 +26,11 @@ export default [
   route("docs", "routes/docs.tsx"),
   route("docs/:owner/:repo", "routes/docs.$owner.$repo.tsx"),
   route("swagger-qa", "routes/swagger-qa.tsx"),
+  route("api-tests/:projectId", "routes/api-tests.$projectId.tsx"),
+  // Same page for GitHub-connected repos, which have owner/repo and no project.
+  route("api-tests/repo/:owner/:repo", "routes/api-tests.$projectId.tsx", {
+    id: "api-tests-repo",
+  }),
   route("e2e-qa", "routes/e2e-qa.tsx"),
   route("academy", "routes/academy.tsx"),
   route("academy/:courseId", "routes/academy.$courseId.tsx"),

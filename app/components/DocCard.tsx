@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { Link } from "react-router"
 import {
   ArrowLeft,
   ChevronDown,
@@ -8,6 +9,7 @@ import {
   Settings,
   ShieldCheck,
   Trash2,
+  FlaskConical,
 } from "lucide-react"
 import { Card, CardContent, CardHeader } from "~/components/ui/card"
 import { Badge } from "~/components/ui/badge"
@@ -50,7 +52,12 @@ export function DocCard({ doc, onDelete }: DocCardProps) {
   const [checkingConfig, setCheckingConfig] = useState(false)
   const [pendingRun, setPendingRun] = useState(false)
 
-  const { getConfig } = useQaApi()
+  const { getConfig, generateSuites } = useQaApi()
+  // "Create test" saves a smoke + a regression suite for this endpoint. Unlike
+  // Run QA (a one-off bug hunt whose cases are thrown away) these are kept and
+  // re-run later from the tests page, so drift shows up as a regression.
+  const [creatingTests, setCreatingTests] = useState(false)
+  const [createdTests, setCreatedTests] = useState(0)
 
   const hasDetails =
     doc.requestBody?.length > 0 ||
@@ -95,6 +102,38 @@ export function DocCard({ doc, onDelete }: DocCardProps) {
               ) : null}
             </div>
             <div className="flex items-center gap-1 shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  setCreatingTests(true)
+                  const suites = await generateSuites(doc._id)
+                  setCreatingTests(false)
+                  if (suites) {
+                    setCreatedTests(
+                      suites.reduce((n, x) => n + x.cases.length, 0)
+                    )
+                  }
+                }}
+                disabled={creatingTests}
+                title="Generate smoke + regression tests for this endpoint and save them"
+                className="h-8 border-white/20 text-white/80 hover:text-white hover:bg-white/10 hover:border-white/30 gap-1.5"
+              >
+                {creatingTests ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <FlaskConical className="h-3.5 w-3.5 text-emerald-400" />
+                )}
+                {createdTests > 0 ? `${createdTests} tests` : "Create test"}
+              </Button>
+              {createdTests > 0 && doc.owner && doc.repo && (
+                <Link
+                  to={`/api-tests/repo/${doc.owner}/${doc.repo}`}
+                  className="text-[11px] text-emerald-400 hover:underline px-1"
+                >
+                  view
+                </Link>
+              )}
               <Button
                 variant="outline"
                 size="sm"

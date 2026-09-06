@@ -16,6 +16,7 @@ export function useInstallationsApi() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [disconnecting, setDisconnecting] = useState(false)
+  const [syncing, setSyncing] = useState(false)
 
   const getInstallations = async () => {
     setLoading(true)
@@ -31,6 +32,32 @@ export function useInstallationsApi() {
       setError("Error loading installations")
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Force a re-read of the repo list from GitHub, then show the result.
+  //
+  // The list normally stays current via the installation_repositories webhook.
+  // This is for when it didn't: an org approval whose webhook never landed
+  // leaves a stale list that no amount of reloading the page can fix, because
+  // the staleness is in our database, not in the browser.
+  const syncInstallations = async () => {
+    setSyncing(true)
+    setError(null)
+    try {
+      const res = await fetch(`${BASE_URL}/api/installations/sync`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${getAuthToken()}` },
+      })
+      if (!res.ok) throw new Error("Request failed")
+      const data = await res.json()
+      setInstallations(data.repos ?? [])
+      return true
+    } catch {
+      setError("Error refreshing repositories")
+      return false
+    } finally {
+      setSyncing(false)
     }
   }
 
@@ -55,6 +82,8 @@ export function useInstallationsApi() {
     loading,
     error,
     getInstallations,
+    syncInstallations,
+    syncing,
     disconnectInstallation,
     disconnecting,
   }

@@ -48,7 +48,13 @@ export interface E2eTest {
   videoUrl?: string
   specCode?: string
   status: E2eTestStatus
-  heal?: { attempt: number; passed: boolean; error: string; durationMs: number }[]
+  heal?: {
+    attempt: number
+    passed: boolean
+    error: string
+    durationMs: number
+    traceUrl?: string
+  }[]
   commit?: E2eCommit
   createdAt: string
 }
@@ -116,7 +122,13 @@ export type ImproveTestResult =
       specCode: string
       status: E2eTestStatus
       passed: boolean
-      heal: { attempt: number; passed: boolean; error: string; durationMs: number }[]
+      heal: {
+        attempt: number
+        passed: boolean
+        error: string
+        durationMs: number
+        traceUrl?: string
+      }[]
       repo: { files: number; testIds: number }
     }
   | { loginRequired: true; env: string | null }
