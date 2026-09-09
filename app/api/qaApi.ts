@@ -124,6 +124,18 @@ export interface ImportResult {
   endpoints: { method: string; path: string; section: string }[]
 }
 
+// One auth method the API accepts. An API commonly takes more than one (an API
+// key AND a bearer token), and each has to be testable on its own.
+export interface AuthScheme {
+  name: string
+  type: QaAuthType
+  headerName: string
+  username: string
+  valueMasked: string
+  passwordMasked: string
+  configured: boolean
+}
+
 export interface ProjectAuth {
   type: QaAuthType
   headerName: string
@@ -158,6 +170,7 @@ export interface ApiProject {
   variables: ProjectVariable[]
   github?: ProjectGithubLink
   updatedAt?: string
+  authSchemes?: AuthScheme[]
 }
 
 // One spec file found in a connected repo.
@@ -300,12 +313,18 @@ export function useQaApi() {
     return (await res.json()) as QaConfig
   }
 
-  const runQa = async (docId: string): Promise<QaRun | null> => {
+  // `authSchemeName` targets one declared auth method; omitted runs use the
+  // project's active one.
+  const runQa = async (
+    docId: string,
+    authSchemeName?: string
+  ): Promise<QaRun | null> => {
     setLoading(true)
     setError(null)
     try {
       const res = await apiFetch(`/api/qa/find-bugs/${docId}`, {
         method: "POST",
+        body: JSON.stringify(authSchemeName ? { authSchemeName } : {}),
       })
       if (!res.ok) {
         const body = await res.text()
@@ -702,10 +721,16 @@ export function useQaApi() {
     }
   }
 
-  const runSuite = async (suiteId: string): Promise<SuiteRunResult | null> => {
+  const runSuite = async (
+    suiteId: string,
+    authSchemeName?: string
+  ): Promise<SuiteRunResult | null> => {
     setError(null)
     try {
-      const res = await apiFetch(`/api/qa/suites/${suiteId}/run`, { method: "POST" })
+      const res = await apiFetch(`/api/qa/suites/${suiteId}/run`, {
+        method: "POST",
+        body: JSON.stringify(authSchemeName ? { authSchemeName } : {}),
+      })
       if (!res.ok) {
         const body = await res.text()
         setError(safeMessage(body) || `Run failed (${res.status})`)

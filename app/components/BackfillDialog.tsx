@@ -245,6 +245,8 @@ function ProgressView({
       ? 100
       : 0
 
+  // Still computed so re-enabling the box above is a one-line change.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const cost = estimateCost(status.model, status.tokensInput, status.tokensOutput)
 
   const barColor =
@@ -258,14 +260,17 @@ function ProgressView({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <StatusBadge status={status.status} />
-        {status.model && (
+        {/* HIDDEN: which model ran is internal — the customer has no use for
+            "claude-opus-4-7" and it leaks an implementation detail. Uncomment to
+            bring it back. */}
+        {/* {status.model && (
           <Badge
             variant="outline"
             className="text-xs font-mono text-white/60 border-white/20"
           >
             {status.model}
           </Badge>
-        )}
+        )} */}
       </div>
 
       <div className="space-y-1.5">
@@ -303,7 +308,10 @@ function ProgressView({
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      {/* Cost was hidden alongside the model: it showed OUR spend ($0.0000),
+          which means nothing to the customer and reads like a broken number.
+          Restore the grid-cols-2 wrapper and the InfoBox below together. */}
+      <div className="grid grid-cols-1 gap-2">
         <InfoBox label="Tokens">
           <span className="font-mono">
             {status.tokensInput.toLocaleString()} in
@@ -311,11 +319,11 @@ function ProgressView({
             {status.tokensOutput.toLocaleString()} out
           </span>
         </InfoBox>
-        <InfoBox label="Est. cost">
+        {/* <InfoBox label="Est. cost">
           <span className="font-mono">
             {cost !== null ? `$${cost.toFixed(4)}` : "—"}
           </span>
-        </InfoBox>
+        </InfoBox> */}
       </div>
 
       {status.status === "failed" && status.error && (

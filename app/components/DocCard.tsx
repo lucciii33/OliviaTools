@@ -181,6 +181,28 @@ export function DocCard({ doc, onDelete }: DocCardProps) {
           {doc.description && (
             <p className="text-sm text-white/60 mt-2">{doc.description}</p>
           )}
+
+          {/* Query params are the thing you scan a docs list FOR — showing them
+              only inside the expanded Details tab meant two clicks per endpoint
+              to answer "what can I filter by?". Collapsed cards now show them
+              inline; the expanded table still carries types and descriptions. */}
+          {!expanded && doc.queryParams?.length > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap mt-2">
+              <span className="text-[10px] font-semibold text-white/30 uppercase tracking-wider">
+                Params
+              </span>
+              {doc.queryParams.map((p) => (
+                <code
+                  key={p.name}
+                  title={p.description || p.type}
+                  className="text-[11px] font-mono rounded px-1.5 py-0.5 bg-white/10 text-white/70"
+                >
+                  {p.name}
+                  {p.required && <span className="text-amber-400/80">*</span>}
+                </code>
+              ))}
+            </div>
+          )}
         </CardHeader>
 
         {expanded && (

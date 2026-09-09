@@ -9,6 +9,7 @@ import {
 } from "~/components/ui/dialog"
 import { Button } from "~/components/ui/button"
 import { EndpointVariables } from "./EndpointVariables"
+import { AuthSchemePicker } from "./AuthSchemePicker"
 import { Input } from "~/components/ui/input"
 import {
   useQaApi,
@@ -197,6 +198,32 @@ grant_type  = client_credentials`}
                 placeholder="paste once…"
                 className="bg-black/30 border-white/10 font-mono text-sm mt-1"
               />
+            </div>
+          )}
+
+          {/* Every scheme the spec declared — read-only here, it's what the
+              runner can target. The picker itself lives where runs start. */}
+          {project.authSchemes && project.authSchemes.length > 1 && (
+            <div className="pt-1 border-t border-white/10">
+              <label className="text-xs text-white/50">
+                Auth methods this API accepts
+              </label>
+              <div className="mt-1 space-y-0.5">
+                {project.authSchemes.map((sc) => (
+                  <div key={sc.name} className="text-[11px] font-mono flex items-center gap-2">
+                    <span className="text-white/60">{sc.name}</span>
+                    <span className="text-white/30">
+                      {sc.type} · {sc.headerName || "Authorization"}
+                    </span>
+                    {!sc.configured && (
+                      <span className="text-red-400/70">no credential saved</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-white/30 mt-1">
+                Pick which one to run against on the tests page.
+              </p>
             </div>
           )}
 

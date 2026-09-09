@@ -19,6 +19,7 @@ import { useAuth } from "~/context/AuthContext"
 import { QaConfigDialog } from "~/components/QaConfigDialog"
 import { ProjectAuthDialog } from "~/components/ProjectAuthDialog"
 import { EndpointVariables } from "~/components/EndpointVariables"
+import { AuthSchemePicker } from "~/components/AuthSchemePicker"
 import {
   useQaApi,
   type ApiProject,
@@ -63,6 +64,9 @@ export default function ApiTestsPage() {
   // swagger pages use — a token typed here is the token those pages show.
   const [authOpen, setAuthOpen] = useState(false)
   const [project, setProject] = useState<ApiProject | null>(null)
+  // "" = the project's default scheme. Naming one runs every suite through that
+  // single auth method, which is how a per-method hole becomes visible.
+  const [authScheme, setAuthScheme] = useState("")
 
   async function refresh() {
     setLoading(true)
@@ -126,7 +130,7 @@ export default function ApiTestsPage() {
 
   async function handleRun(suiteId: string) {
     setRunningId(suiteId)
-    const res = await runSuite(suiteId)
+    const res = await runSuite(suiteId, authScheme || undefined)
     setRunningId(null)
     if (res) {
       setRuns((r) => ({ ...r, [suiteId]: res }))
@@ -219,6 +223,16 @@ export default function ApiTestsPage() {
                 )
               })}
             </div>
+
+            {project?.authSchemes && project.authSchemes.length > 1 && (
+              <div className="mb-4 rounded-lg border border-white/10 bg-white/[0.02] p-3">
+                <AuthSchemePicker
+                  schemes={project.authSchemes}
+                  value={authScheme}
+                  onChange={setAuthScheme}
+                />
+              </div>
+            )}
 
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs text-white/40 uppercase tracking-wider">
