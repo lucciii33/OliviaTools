@@ -24,6 +24,7 @@ import {
   WandSparkles,
   XCircle,
   Zap,
+  FlaskConical,
 } from "lucide-react"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card"
@@ -78,6 +79,7 @@ import {
   type McpTool,
   type McpTransport,
   type McpTrialLimitAction,
+  generateMcpToolSuite,
 } from "~/api/mcpDocsApi"
 import { cn } from "~/lib/utils"
 
@@ -1165,6 +1167,14 @@ export default function McpDocs() {
               </div>
               {activeProjectId && (
                 <div className="flex items-center gap-3">
+                  {/* Per-tool saved suites. Smoke/Regression next to it are the
+                      older project-wide generators, kept for small servers. */}
+                  <Link
+                    to={`/mcp-tests/${activeProjectId}`}
+                    className="text-xs text-emerald-300 hover:text-emerald-200 font-medium"
+                  >
+                    Tests
+                  </Link>
                   <Link
                     to={`/mcp-docs/${activeProjectId}/smoke`}
                     className="text-xs text-blue-300 hover:text-blue-200"
@@ -2356,6 +2366,56 @@ function ProjectBugs({
   )
 }
 
+function ToolCreateTestButton({
+  projectId,
+  toolName,
+}: {
+  projectId?: string
+  toolName?: string
+}) {
+  const [busy, setBusy] = useState(false)
+  const [count, setCount] = useState(0)
+  if (!projectId || !toolName) return null
+
+  return (
+    <div className="flex items-center gap-1.5 shrink-0">
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={busy}
+        title="Generate smoke + regression tests for this tool and save them"
+        className="h-8 border-white/20 text-white/80 hover:text-white hover:bg-white/10 hover:border-white/30 gap-1.5"
+        onClick={async () => {
+          setBusy(true)
+          try {
+            const res = await generateMcpToolSuite(projectId, toolName)
+            setCount(res.suites.reduce((n, x) => n + x.cases.length, 0))
+          } catch {
+            /* left to the page-level error surface */
+          } finally {
+            setBusy(false)
+          }
+        }}
+      >
+        {busy ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <FlaskConical className="h-3.5 w-3.5 text-emerald-400" />
+        )}
+        {count > 0 ? `${count} tests` : "Create test"}
+      </Button>
+      {count > 0 && (
+        <Link
+          to={`/mcp-tests/${projectId}`}
+          className="text-[11px] text-emerald-400 hover:underline"
+        >
+          view
+        </Link>
+      )}
+    </div>
+  )
+}
+
 function McpDocCard({
   doc,
   openBugCount,
@@ -2462,6 +2522,10 @@ function McpDocCard({
               </div>
             )}
         </div>
+        {/* Generates a saved smoke + regression suite for THIS tool only. The
+            project-level generators build every tool's cases in one model call
+            capped at 4096 output tokens, which truncates on a big server. */}
+        <ToolCreateTestButton projectId={doc.projectId} toolName={doc.toolName} />
         <Button
           variant="outline"
           size="sm"

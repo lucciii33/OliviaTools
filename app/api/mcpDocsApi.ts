@@ -721,3 +721,128 @@ export async function generateMcpDocsForTool(
   )
   return readJson<GenerateMcpDocForToolResponse>(res)
 }
+
+// ---- Per-tool saved suites (smoke / regression) ----
+//
+// One suite per tool per kind, generated one tool at a time. The older
+// project-level smoke/regression endpoints build every tool's cases in a single
+// model call capped at 4096 output tokens, which truncates on a server with
+// many tools; these scale linearly instead.
+
+export interface McpToolTestCase {
+  _id: string
+  name: string
+  covers: string
+  category: string
+  args: Record<string, unknown>
+  assertions: string[]
+  expectError: boolean
+  baseline?: { isError: boolean | null; resultKeys: string[]; recordedAt: string | null }
+}
+
+export interface McpToolSuite {
+  _id: string
+  projectId: string
+  toolName: string
+  group: string
+  kind: "smoke" | "regression"
+  cases: McpToolTestCase[]
+  lastRun?: {
+    at: string | null
+    passed: number
+    failed: number
+    regressions: number
+  }
+}
+
+export interface McpSuiteCaseResult {
+  caseId: string
+  name: string
+  covers: string
+  category: string
+  expectError: boolean
+  passed: boolean
+  isRegression: boolean
+  errored: boolean
+  error: string | null
+  latencyMs: number | null
+  assertions: { assertion: string; passed: boolean; reason: string }[]
+  regressionDetail: string
+}
+
+export interface McpSuiteRunResult {
+  summary: { total: number; passed: number; failed: number; regressions: number }
+  results: McpSuiteCaseResult[]
+}
+
+export interface McpSuiteGenerateResult {
+  created: { toolName: string; kind: string; cases: number }[]
+  failed: { toolName: string; kind: string; error: string }[]
+  tools: number
+}
+
+/** "Create test" on one tool. No kind → generates smoke AND regression. */
+export async function generateMcpToolSuite(
+  projectId: string,
+  toolName: string,
+  kind?: "smoke" | "regression"
+) {
+  const res = await apiFetch(
+    `/api/mcp-lab/projects/${encodeURIComponent(projectId)}/tools/${encodeURIComponent(
+      toolName
+    )}/suites`,
+    { method: "POST", body: JSON.stringify(kind ? { kind } : {}) }
+  )
+  return readJson<{ suites: McpToolSuite[] }>(res)
+}
+
+/** Same for every tool in the project — sequential, reports partial failures. */
+export async function generateMcpProjectSuites(
+  projectId: string,
+  toolNames?: string[]
+) {
+  const res = await apiFetch(
+    `/api/mcp-lab/projects/${encodeURIComponent(projectId)}/tool-suites`,
+    { method: "POST", body: JSON.stringify(toolNames?.length ? { toolNames } : {}) }
+  )
+  return readJson<McpSuiteGenerateResult>(res)
+}
+
+export async function listMcpToolSuites(projectId: string) {
+  const res = await apiFetch(
+    `/api/mcp-lab/projects/${encodeURIComponent(projectId)}/tool-suites`,
+    { cache: "no-store" }
+  )
+  return readJson<McpToolSuite[]>(res)
+}
+
+export async function runMcpToolSuite(suiteId: string) {
+  const res = await apiFetch(
+    `/api/mcp-lab/tool-suites/${encodeURIComponent(suiteId)}/run`,
+    { method: "POST" }
+  )
+  return readJson<McpSuiteRunResult>(res)
+}
+
+/** Change what one test covers, from a plain-language instruction. */
+export async function refineMcpToolSuiteCase(
+  suiteId: string,
+  caseId: string,
+  instruction: string
+) {
+  const res = await apiFetch(
+    `/api/mcp-lab/tool-suites/${encodeURIComponent(suiteId)}/cases/${encodeURIComponent(
+      caseId
+    )}/refine`,
+    { method: "POST", body: JSON.stringify({ instruction }) }
+  )
+  return readJson<{ case: McpToolTestCase }>(res)
+}
+
+export async function deleteMcpToolSuite(suiteId: string) {
+  const res = await apiFetch(
+    `/api/mcp-lab/tool-suites/${encodeURIComponent(suiteId)}`,
+    { method: "DELETE" }
+  )
+  return readJson<{ success: boolean }>(res)
+}

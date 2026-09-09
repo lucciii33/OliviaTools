@@ -20,6 +20,7 @@ export default [
     "routes/mcp-docs.$projectId.regression.tsx"
   ),
   route("mcp-docs/:projectId/load", "routes/mcp-docs.$projectId.load.tsx"),
+  route("mcp-tests/:projectId", "routes/mcp-tests.$projectId.tsx"),
   route("claude-skills", "routes/claude-skills.tsx"),
   route("privacy", "routes/privacy.tsx"),
   route("terms", "routes/terms.tsx"),
