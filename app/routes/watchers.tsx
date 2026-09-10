@@ -302,6 +302,13 @@ export default function WatchersPage() {
                     ) : (
                       <>
                         {w.lastRun.newEndpoints} new · {w.lastRun.testsCreated} tests
+                        {w.lastRun.bugsFound > 0 && (
+                          <span className="text-red-400">
+                            {" "}
+                            · {w.lastRun.bugsFound} bug
+                            {w.lastRun.bugsFound === 1 ? "" : "s"}
+                          </span>
+                        )}
                       </>
                     )}
                   </span>
@@ -412,9 +419,19 @@ export default function WatchersPage() {
                           <span className="text-white/30 shrink-0">
                             {e.testsCreated} tests
                           </span>
-                          {e.testError && (
-                            <span className="text-red-400/60 truncate">
-                              {e.testError}
+                          {/* The bug hunter's result — the part worth reading. */}
+                          {e.bugsFound > 0 ? (
+                            <span className="text-red-400 shrink-0">
+                              {e.bugsFound} bug{e.bugsFound === 1 ? "" : "s"}
+                            </span>
+                          ) : !e.qaError ? (
+                            <span className="text-emerald-400/60 shrink-0">
+                              no bugs
+                            </span>
+                          ) : null}
+                          {(e.testError || e.qaError) && (
+                            <span className="text-amber-400/60 truncate">
+                              {e.testError || e.qaError}
                             </span>
                           )}
                         </div>

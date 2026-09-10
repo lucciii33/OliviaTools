@@ -11,12 +11,20 @@ export interface Watcher {
   branch: string
   enabled: boolean
   installationId: number
-  actions: { regenerateDocs: boolean; generateTests: boolean }
+  actions: {
+    regenerateDocs: boolean
+    generateTests: boolean
+    runTests: boolean
+    runQa: boolean
+  }
   lastRun?: {
     at: string | null
     status: string
     newEndpoints: number
     testsCreated: number
+    testsPassed: number
+    testsFailed: number
+    bugsFound: number
   }
   updatedAt?: string
 }
@@ -25,8 +33,17 @@ export interface WatcherRunEndpoint {
   docId: string
   method: string
   path: string
+  // Saved suites written for this endpoint.
   testsCreated: number
+  testsPassed: number
+  testsFailed: number
   testError: string
+  runError: string
+  // Bug hunter — a different thing from the suites: throwaway cases run to find
+  // what is actually wrong with the endpoint that just shipped.
+  bugsFound: number
+  qaRunId: string
+  qaError: string
 }
 
 export interface WatcherRun {
