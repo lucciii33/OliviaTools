@@ -19,6 +19,11 @@ export interface Doc {
   method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH"
   path: string
   section?: string
+  // Set by the watcher when this endpoint showed up in a merge that wasn't in
+  // the previous scan. Cleared once someone has looked at it.
+  isNewEndpoint?: boolean
+  firstSeenAt?: string | null
+  firstSeenPr?: number | null
   description: string
   requestBody: DocParam[]
   queryParams: DocParam[]

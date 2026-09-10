@@ -104,6 +104,22 @@ export function DocCard({ doc, onDelete }: DocCardProps) {
                 </Badge>
               ) : null}
             </div>
+            {/* Flagged by the watcher: this endpoint arrived in a merge and
+                nobody has looked at it yet. The whole point of a watch is that
+                this badge is waiting for you in the morning. */}
+            {doc.isNewEndpoint && (
+              <Badge
+                variant="outline"
+                className="text-[10px] shrink-0 border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                title={
+                  doc.firstSeenPr
+                    ? `First seen in PR #${doc.firstSeenPr}`
+                    : "First seen by the watcher"
+                }
+              >
+                NEW
+              </Badge>
+            )}
             <div className="flex items-center gap-1 shrink-0">
               <Button
                 variant="outline"

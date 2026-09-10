@@ -1,6 +1,6 @@
 import { useEffect } from "react"
 import { Link, useNavigate } from "react-router"
-import { ArrowRight, BookOpen, Boxes, FlaskConical, Server, Settings, Sparkles } from "lucide-react"
+import { ArrowRight, BookOpen, Boxes, Eye, FlaskConical, Server, Settings, Sparkles } from "lucide-react"
 import { Button, buttonVariants } from "~/components/ui/button"
 import { useAuth } from "~/context/AuthContext"
 import { cn } from "~/lib/utils"
@@ -29,6 +29,14 @@ const options = [
     action: "Open Front End workspace",
     icon: FlaskConical,
     accent: "text-emerald-300 bg-emerald-500/10 border-emerald-500/20",
+  },
+  {
+    title: "Watchers",
+    description: "Watch a repo. When something merges, Olivia regenerates the docs, flags endpoints that weren't there before, and writes QA for them.",
+    to: "/watchers",
+    action: "Open watchers",
+    icon: Eye,
+    accent: "text-amber-300 bg-amber-500/10 border-amber-500/20",
   },
   {
     title: "Workspace Members",
