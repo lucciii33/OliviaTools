@@ -114,11 +114,15 @@ export default function WatchersPage() {
     [watchers, runs]
   )
 
-  // Poll only while something is actually running — no timer burning in the
-  // background on a page that is just sitting there.
+  // Poll always, faster while something is running.
+  //
+  // Polling ONLY when a run is already in flight looked cheaper but broke the
+  // main case: a watcher is triggered by a merge, so the page is sitting idle
+  // when the work starts. With no timer running, nothing ever noticed it began
+  // and the user saw a static page until they refreshed by hand — which defeats
+  // the point of watching.
   useEffect(() => {
-    if (!anyRunning) return
-    const id = setInterval(refresh, 5000)
+    const id = setInterval(refresh, anyRunning ? 5000 : 20000)
     return () => clearInterval(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [anyRunning])
@@ -294,9 +298,7 @@ export default function WatchersPage() {
                     {w.lastRun.status === "failed" ? (
                       <span className="text-red-400">last run failed</span>
                     ) : w.lastRun.status === "running" ? (
-                      <span className="text-amber-400">
-                        regenerating docs…
-                      </span>
+                      <span className="text-amber-400">running…</span>
                     ) : (
                       <>
                         {w.lastRun.newEndpoints} new · {w.lastRun.testsCreated} tests
