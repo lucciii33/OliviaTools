@@ -32,6 +32,7 @@ import {
   type NewEndpoint,
 } from "~/api/watcherApi"
 import { cn } from "~/lib/utils"
+import { McpWatchersSection } from "~/components/McpWatchersSection"
 
 // Watchers.
 //
@@ -449,6 +450,9 @@ export default function WatchersPage() {
             </div>
           </>
         )}
+        {/* MCP servers: same idea, different source of truth (the live server
+            rather than the merged code), so it lives in its own section. */}
+        <McpWatchersSection />
       </main>
     </div>
   )

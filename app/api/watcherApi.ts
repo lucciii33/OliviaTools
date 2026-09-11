@@ -161,3 +161,137 @@ export async function acknowledgeNewEndpoints(docIds?: string[]) {
     })
   )
 }
+
+// ---- MCP watchers ----
+//
+// Same trigger as the API watchers (a merge into the watched branch), different
+// source of truth: MCP tools come from the LIVE server, which is still running
+// the old build when the merge lands. So a run waits — re-reading the server's
+// tools on an interval — until the new ones appear or the wait runs out.
+
+export interface McpWatcher {
+  _id: string
+  mcpProjectId: string
+  projectName: string
+  owner: string
+  repo: string
+  branch: string
+  enabled: boolean
+  installationId: number
+  actions: { generateTests: boolean; runTests: boolean; runQa: boolean }
+  wait: { intervalSec: number; maxMinutes: number }
+  lastRun?: {
+    at: string | null
+    status: string
+    newTools: number
+    testsCreated: number
+    bugsFound: number
+  }
+}
+
+export interface McpWatcherRunTool {
+  name: string
+  testsCreated: number
+  testsPassed: number
+  testsFailed: number
+  testError: string
+  bugsFound: number
+  qaRunId: string
+  qaError: string
+}
+
+export interface McpWatcherRun {
+  _id: string
+  projectName: string
+  owner: string
+  repo: string
+  trigger: {
+    kind: string
+    prNumber: number | null
+    prTitle: string
+    author: string
+    branch: string
+  }
+  status: "pending" | "running" | "success" | "failed"
+  // How many times the live server was asked before the new tools showed up.
+  checks: number
+  note: string
+  toolsAfter: number
+  newTools: McpWatcherRunTool[]
+  error: string
+  startedAt: string
+  finishedAt: string | null
+}
+
+export interface NewTool {
+  _id: string
+  name: string
+  projectId: string
+  projectName: string
+  firstSeenAt: string | null
+  firstSeenPr: number | null
+}
+
+export async function listMcpWatchers() {
+  return readJson<McpWatcher[]>(
+    await apiFetch("/api/mcp-watchers", { cache: "no-store" })
+  )
+}
+
+export async function createMcpWatcher(payload: {
+  mcpProjectId: string
+  owner: string
+  repo: string
+  branch?: string
+}) {
+  return readJson<McpWatcher>(
+    await apiFetch("/api/mcp-watchers", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    })
+  )
+}
+
+export async function updateMcpWatcher(
+  id: string,
+  payload: {
+    enabled?: boolean
+    branch?: string
+    actions?: Partial<McpWatcher["actions"]>
+    wait?: Partial<McpWatcher["wait"]>
+  }
+) {
+  return readJson<McpWatcher>(
+    await apiFetch(`/api/mcp-watchers/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    })
+  )
+}
+
+export async function deleteMcpWatcher(id: string) {
+  return readJson<{ success: boolean }>(
+    await apiFetch(`/api/mcp-watchers/${id}`, { method: "DELETE" })
+  )
+}
+
+export async function listMcpWatcherRuns() {
+  return readJson<McpWatcherRun[]>(
+    await apiFetch("/api/mcp-watchers/runs/all", { cache: "no-store" })
+  )
+}
+
+export async function listNewTools() {
+  return readJson<NewTool[]>(
+    await apiFetch("/api/mcp-watchers/new-tools/all", { cache: "no-store" })
+  )
+}
+
+export async function acknowledgeNewTools(toolIds?: string[]) {
+  return readJson<{ cleared: number }>(
+    await apiFetch("/api/mcp-watchers/new-tools/acknowledge", {
+      method: "POST",
+      body: JSON.stringify(toolIds?.length ? { toolIds } : {}),
+    })
+  )
+}

@@ -82,6 +82,10 @@ export interface McpTool {
   inputSchema?: Record<string, unknown>
   suggestedArgs?: Record<string, unknown> | null
   suggestedArgsGeneratedAt?: string | null
+  // Set by the MCP watcher when this tool appeared on the live server after a
+  // merge. Cleared once reviewed.
+  isNewTool?: boolean
+  firstSeenPr?: number | null
 }
 
 export interface McpQaRunPayload {

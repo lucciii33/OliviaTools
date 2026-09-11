@@ -1289,9 +1289,26 @@ export default function McpDocs() {
                     >
                       <div className="flex items-start justify-between gap-3 p-3">
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-white truncate">
-                            {toolName}
-                          </p>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <p className="text-sm font-medium text-white truncate">
+                              {toolName}
+                            </p>
+                            {/* Flagged by the MCP watcher: this tool appeared on
+                                the live server after a merge and nobody has
+                                reviewed it yet — same badge as new endpoints. */}
+                            {tool.isNewTool && (
+                              <span
+                                className="shrink-0 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-1.5 text-[10px] text-emerald-300"
+                                title={
+                                  tool.firstSeenPr
+                                    ? `First seen in PR #${tool.firstSeenPr}`
+                                    : "First seen by the watcher"
+                                }
+                              >
+                                NEW
+                              </span>
+                            )}
+                          </div>
                           {tool.description && (
                             <p className="text-xs text-white/45 mt-1 line-clamp-2">
                               {tool.description}
