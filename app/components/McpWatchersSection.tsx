@@ -350,6 +350,17 @@ export function McpWatchersSection() {
                 {r.note && !r.error && (
                   <p className="mt-1.5 text-[11px] text-white/35">{r.note}</p>
                 )}
+                {(r.editedTools?.length ?? 0) > 0 && (
+                  <div className="mt-2 space-y-0.5">
+                    {r.editedTools!.map((t) => (
+                      <div key={`edited-${t.name}`} className="flex items-center gap-2 text-[11px]">
+                        <span className="text-amber-300/80 shrink-0">edited</span>
+                        <span className="font-mono text-white/60 truncate">{t.name}</span>
+                        <span className="text-white/30 truncate">{t.changes.join(", ")}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {r.newTools.length > 0 && (
                   <div className="mt-2 space-y-0.5">
                     {r.newTools.map((t) => (

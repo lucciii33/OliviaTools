@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react"
-import { Link } from "react-router"
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router";
 import {
   Eye,
   Loader2,
@@ -10,14 +10,11 @@ import {
   AlertTriangle,
   CheckCircle2,
   Plus,
-} from "lucide-react"
-import { Sidebar } from "~/components/Sidebar"
-import { Button } from "~/components/ui/button"
-import { useAuth } from "~/context/AuthContext"
-import {
-  useInstallationsApi,
-  type Installation,
-} from "~/api/installationsApi"
+} from "lucide-react";
+import { Sidebar } from "~/components/Sidebar";
+import { Button } from "~/components/ui/button";
+import { useAuth } from "~/context/AuthContext";
+import { useInstallationsApi, type Installation } from "~/api/installationsApi";
 import {
   listWatchers,
   createWatcher,
@@ -30,9 +27,9 @@ import {
   type Watcher,
   type WatcherRun,
   type NewEndpoint,
-} from "~/api/watcherApi"
-import { cn } from "~/lib/utils"
-import { McpWatchersSection } from "~/components/McpWatchersSection"
+} from "~/api/watcherApi";
+import { cn } from "~/lib/utils";
+import { McpWatchersSection } from "~/components/McpWatchersSection";
 
 // Watchers.
 //
@@ -41,18 +38,18 @@ import { McpWatchersSection } from "~/components/McpWatchersSection"
 // which endpoints are new, and generate QA for them. The value is that an
 // endpoint shipped on Friday is documented and covered by Monday.
 export default function WatchersPage() {
-  const { user } = useAuth()
-  const { installations, getInstallations } = useInstallationsApi()
+  const { user } = useAuth();
+  const { installations, getInstallations } = useInstallationsApi();
 
-  const [watchers, setWatchers] = useState<Watcher[]>([])
-  const [runs, setRuns] = useState<WatcherRun[]>([])
-  const [fresh, setFresh] = useState<NewEndpoint[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [busyId, setBusyId] = useState<string | null>(null)
-  const [adding, setAdding] = useState(false)
-  const [pickRepo, setPickRepo] = useState("")
-  const [pickBranch, setPickBranch] = useState("main")
+  const [watchers, setWatchers] = useState<Watcher[]>([]);
+  const [runs, setRuns] = useState<WatcherRun[]>([]);
+  const [fresh, setFresh] = useState<NewEndpoint[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [pickRepo, setPickRepo] = useState("");
+  const [pickBranch, setPickBranch] = useState("main");
 
   async function refresh() {
     try {
@@ -60,48 +57,50 @@ export default function WatchersPage() {
         listWatchers(),
         listWatcherRuns(),
         listNewEndpoints(),
-      ])
-      setWatchers(w)
-      setRuns(r)
-      setFresh(n)
-      setError(null)
+      ]);
+      setWatchers(w);
+      setRuns(r);
+      setFresh(n);
+      setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load watchers")
+      setError(err instanceof Error ? err.message : "Failed to load watchers");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
   useEffect(() => {
-    getInstallations()
-    refresh()
+    getInstallations();
+    refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, []);
 
   // A repo already watched on that branch shouldn't be offered again.
   const available = useMemo(() => {
-    const taken = new Set(watchers.map((w) => `${w.owner}/${w.repo}`))
-    const seen = new Set<string>()
+    const taken = new Set(watchers.map((w) => `${w.owner}/${w.repo}`));
+    const seen = new Set<string>();
     return (installations || []).filter((r: Installation) => {
-      const full = r.fullName || `${r.owner}/${r.repo}`
-      if (taken.has(full) || seen.has(full)) return false
-      seen.add(full)
-      return true
-    })
-  }, [installations, watchers])
+      const full = r.fullName || `${r.owner}/${r.repo}`;
+      if (taken.has(full) || seen.has(full)) return false;
+      seen.add(full);
+      return true;
+    });
+  }, [installations, watchers]);
 
   async function handleAdd() {
-    if (!pickRepo) return
-    const [owner, repo] = pickRepo.split("/")
-    setAdding(true)
+    if (!pickRepo) return;
+    const [owner, repo] = pickRepo.split("/");
+    setAdding(true);
     try {
-      await createWatcher({ owner, repo, branch: pickBranch || "main" })
-      setPickRepo("")
-      await refresh()
+      await createWatcher({ owner, repo, branch: pickBranch || "main" });
+      setPickRepo("");
+      await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not add the watcher")
+      setError(
+        err instanceof Error ? err.message : "Could not add the watcher",
+      );
     } finally {
-      setAdding(false)
+      setAdding(false);
     }
   }
 
@@ -112,8 +111,8 @@ export default function WatchersPage() {
     () =>
       watchers.some((w) => w.lastRun?.status === "running") ||
       runs.some((r) => r.status === "running"),
-    [watchers, runs]
-  )
+    [watchers, runs],
+  );
 
   // Poll always, faster while something is running.
   //
@@ -123,27 +122,27 @@ export default function WatchersPage() {
   // and the user saw a static page until they refreshed by hand — which defeats
   // the point of watching.
   useEffect(() => {
-    const id = setInterval(refresh, anyRunning ? 5000 : 20000)
-    return () => clearInterval(id)
+    const id = setInterval(refresh, anyRunning ? 5000 : 20000);
+    return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anyRunning])
+  }, [anyRunning]);
 
   // Still here so uncommenting the button above is the only change needed.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async function handleRun(id: string) {
-    setBusyId(id)
+    setBusyId(id);
     try {
-      await runWatcherNow(id)
+      await runWatcherNow(id);
       // Pull once so lastRun flips to "running" and the poll above takes over.
-      await refresh()
+      await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not start the run")
+      setError(err instanceof Error ? err.message : "Could not start the run");
     } finally {
-      setBusyId(null)
+      setBusyId(null);
     }
   }
 
-  if (!user) return null
+  if (!user) return null;
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white flex">
@@ -155,12 +154,13 @@ export default function WatchersPage() {
           <h1 className="text-lg font-semibold">Watchers</h1>
         </div>
         <p className="text-sm text-white/40 mb-2">
-          Watch a repo. When something merges, Olivia regenerates the docs, flags
-          endpoints that weren&apos;t there before, and writes QA for them.
+          Watch a repo. When something merges, Olivia regenerates the docs,
+          flags endpoints that weren&apos;t there before, and writes QA for
+          them.
         </p>
         <p className="text-xs text-white/25 mb-6">
-          Nothing to press — a watch runs itself, triggered by GitHub when a pull
-          request is merged into the branch you name.
+          Nothing to press — a watch runs itself, triggered by GitHub when a
+          pull request is merged into the branch you name.
         </p>
 
         {error && (
@@ -184,8 +184,8 @@ export default function WatchersPage() {
                 variant="outline"
                 className="h-7 text-xs border-white/15"
                 onClick={async () => {
-                  await acknowledgeNewEndpoints()
-                  refresh()
+                  await acknowledgeNewEndpoints();
+                  refresh();
                 }}
               >
                 Mark all reviewed
@@ -201,12 +201,16 @@ export default function WatchersPage() {
                   <span className="font-mono text-emerald-300/80 w-14 shrink-0">
                     {d.method}
                   </span>
-                  <span className="font-mono text-white/70 truncate">{d.path}</span>
+                  <span className="font-mono text-white/70 truncate">
+                    {d.path}
+                  </span>
                   <span className="text-white/30 shrink-0">
                     {d.owner}/{d.repo}
                   </span>
                   {d.firstSeenPr && (
-                    <span className="text-white/25 shrink-0">#{d.firstSeenPr}</span>
+                    <span className="text-white/25 shrink-0">
+                      #{d.firstSeenPr}
+                    </span>
                   )}
                 </Link>
               ))}
@@ -226,15 +230,17 @@ export default function WatchersPage() {
               className="flex-1 bg-white/[0.04] border border-white/10 rounded px-2 py-1.5 text-sm text-white/80 focus:outline-none focus:border-white/25"
             >
               <option value="">
-                {available.length ? "Pick a connected repo…" : "No repos available"}
+                {available.length
+                  ? "Pick a connected repo…"
+                  : "No repos available"}
               </option>
               {available.map((r: Installation) => {
-                const full = r.fullName || `${r.owner}/${r.repo}`
+                const full = r.fullName || `${r.owner}/${r.repo}`;
                 return (
                   <option key={full} value={full} className="bg-[#0a0a0f]">
                     {full}
                   </option>
-                )
+                );
               })}
             </select>
             <input
@@ -278,13 +284,13 @@ export default function WatchersPage() {
                 <button
                   type="button"
                   onClick={async () => {
-                    await updateWatcher(w._id, { enabled: !w.enabled })
-                    refresh()
+                    await updateWatcher(w._id, { enabled: !w.enabled });
+                    refresh();
                   }}
                   title={w.enabled ? "Pause" : "Resume"}
                   className={cn(
                     "h-2 w-2 rounded-full shrink-0",
-                    w.enabled ? "bg-emerald-400" : "bg-white/20"
+                    w.enabled ? "bg-emerald-400" : "bg-white/20",
                   )}
                 />
                 <span className="font-mono text-sm text-white/85">
@@ -302,7 +308,8 @@ export default function WatchersPage() {
                       <span className="text-amber-400">running…</span>
                     ) : (
                       <>
-                        {w.lastRun.newEndpoints} new · {w.lastRun.testsCreated} tests
+                        {w.lastRun.newEndpoints} new · {w.lastRun.testsCreated}{" "}
+                        tests
                         {w.lastRun.bugsFound > 0 && (
                           <span className="text-red-400">
                             {" "}
@@ -350,8 +357,8 @@ export default function WatchersPage() {
                   <button
                     type="button"
                     onClick={async () => {
-                      await deleteWatcher(w._id)
-                      refresh()
+                      await deleteWatcher(w._id);
+                      refresh();
                     }}
                     className="text-white/25 hover:text-red-400 p-1"
                     title="Stop watching"
@@ -389,8 +396,8 @@ export default function WatchersPage() {
                     </span>
                     {r.trigger.kind === "merge" ? (
                       <span className="inline-flex items-center gap-1 text-white/40">
-                        <GitMerge className="h-3 w-3" />
-                        #{r.trigger.prNumber} {r.trigger.prTitle}
+                        <GitMerge className="h-3 w-3" />#{r.trigger.prNumber}{" "}
+                        {r.trigger.prTitle}
                       </span>
                     ) : (
                       <span className="text-white/30">manual</span>
@@ -401,7 +408,9 @@ export default function WatchersPage() {
                   </div>
 
                   {r.error && (
-                    <p className="mt-1.5 text-[11px] text-red-400/80">{r.error}</p>
+                    <p className="mt-1.5 text-[11px] text-red-400/80">
+                      {r.error}
+                    </p>
                   )}
 
                   {r.newEndpoints.length > 0 && (
@@ -440,6 +449,25 @@ export default function WatchersPage() {
                     </div>
                   )}
 
+                  {(r.editedEndpoints?.length ?? 0) > 0 && (
+                    <div className="mt-2 space-y-0.5">
+                      {r.editedEndpoints!.map((e) => (
+                        <div
+                          key={`edited-${e.method}${e.path}`}
+                          className="flex items-center gap-2 text-[11px]"
+                        >
+                          <span className="text-amber-300/80 shrink-0">edited</span>
+                          <span className="font-mono text-white/60 truncate">
+                            {e.method} {e.path}
+                          </span>
+                          <span className="text-white/30 truncate">
+                            {e.changes.join(", ")}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   {r.status === "success" && r.newEndpoints.length === 0 && (
                     <p className="mt-1.5 text-[11px] text-white/30">
                       No new endpoints ({r.docsAfter} total).
@@ -455,5 +483,5 @@ export default function WatchersPage() {
         <McpWatchersSection />
       </main>
     </div>
-  )
+  );
 }

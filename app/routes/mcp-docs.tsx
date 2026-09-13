@@ -1308,7 +1308,35 @@ export default function McpDocs() {
                                 NEW
                               </span>
                             )}
+                            {tool.lastEditedAt && (
+                              <span
+                                className="shrink-0 rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 text-[10px] text-amber-300"
+                                title={
+                                  tool.lastEditedPr
+                                    ? `Last edited in PR #${tool.lastEditedPr}`
+                                    : "Last edited by a merge"
+                                }
+                              >
+                                Edited · last at{" "}
+                                {new Date(tool.lastEditedAt).toLocaleDateString()}
+                              </span>
+                            )}
                           </div>
+                          {/* The watcher updated this tool's schema but not its
+                              doc — generating one calls the tool with real data,
+                              so it waits for a person. Regenerating clears it. */}
+                          {tool.hasPendingChanges && (
+                            <div className="mt-2 rounded-md border border-amber-500/30 bg-amber-500/[0.07] px-2.5 py-1.5">
+                              <p className="text-xs font-medium text-amber-300">
+                                This tool has changes — please update it
+                              </p>
+                              {(tool.pendingChanges?.length ?? 0) > 0 && (
+                                <p className="text-[11px] text-amber-200/60 mt-0.5">
+                                  {tool.pendingChanges!.join(" · ")}
+                                </p>
+                              )}
+                            </div>
+                          )}
                           {tool.description && (
                             <p className="text-xs text-white/45 mt-1 line-clamp-2">
                               {tool.description}

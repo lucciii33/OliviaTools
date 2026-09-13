@@ -58,6 +58,8 @@ export interface WatcherRun {
     branch: string
   }
   status: "running" | "success" | "failed"
+  // Existing endpoints whose params or responses changed in this merge.
+  editedEndpoints?: { docId: string; method: string; path: string; changes: string[] }[]
   newEndpoints: WatcherRunEndpoint[]
   docsBefore: number
   docsAfter: number
@@ -217,6 +219,8 @@ export interface McpWatcherRun {
   checks: number
   note: string
   toolsAfter: number
+  // Existing tools whose schema changed in this merge.
+  editedTools?: { name: string; changes: string[] }[]
   newTools: McpWatcherRunTool[]
   error: string
   startedAt: string

@@ -86,6 +86,12 @@ export interface McpTool {
   // merge. Cleared once reviewed.
   isNewTool?: boolean
   firstSeenPr?: number | null
+  // Set by the MCP watcher when a merge changed this tool's schema. Its doc is
+  // stale until regenerated, which clears the flag.
+  hasPendingChanges?: boolean
+  pendingChanges?: string[]
+  lastEditedAt?: string | null
+  lastEditedPr?: number | null
 }
 
 export interface McpQaRunPayload {

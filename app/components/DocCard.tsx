@@ -120,6 +120,21 @@ export function DocCard({ doc, onDelete }: DocCardProps) {
                 NEW
               </Badge>
             )}
+            {/* The watcher saw this endpoint's params or responses change in a
+                merge. The doc itself was already rewritten; this says when. */}
+            {doc.lastEditedAt && (
+              <Badge
+                variant="outline"
+                className="text-[10px] shrink-0 border-amber-500/40 bg-amber-500/10 text-amber-300"
+                title={
+                  doc.lastEditedPr
+                    ? `Last edited in PR #${doc.lastEditedPr}`
+                    : "Last edited by a merge"
+                }
+              >
+                Edited · last at {new Date(doc.lastEditedAt).toLocaleDateString()}
+              </Badge>
+            )}
             <div className="flex items-center gap-1 shrink-0">
               <Button
                 variant="outline"

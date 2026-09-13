@@ -24,6 +24,9 @@ export interface Doc {
   isNewEndpoint?: boolean
   firstSeenAt?: string | null
   firstSeenPr?: number | null
+  // Set by the watcher when a merge changed this endpoint's params or responses.
+  lastEditedAt?: string | null
+  lastEditedPr?: number | null
   description: string
   requestBody: DocParam[]
   queryParams: DocParam[]
