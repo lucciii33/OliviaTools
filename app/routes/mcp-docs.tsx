@@ -1175,7 +1175,11 @@ export default function McpDocs() {
                   >
                     Tests
                   </Link>
-                  <Link
+                  {/* HIDDEN: Smoke and Regression are the older project-wide
+                      suites. Tests replaces both — per tool, scales to large
+                      servers, and it's where the watcher writes. Routes and data
+                      are untouched; uncomment to bring the links back. */}
+                  {/* <Link
                     to={`/mcp-docs/${activeProjectId}/smoke`}
                     className="text-xs text-blue-300 hover:text-blue-200"
                   >
@@ -1186,7 +1190,7 @@ export default function McpDocs() {
                     className="text-xs text-blue-300 hover:text-blue-200"
                   >
                     Regression
-                  </Link>
+                  </Link> */}
                   <Link
                     to={`/mcp-docs/${activeProjectId}/load`}
                     className="text-xs text-blue-300 hover:text-blue-200"
