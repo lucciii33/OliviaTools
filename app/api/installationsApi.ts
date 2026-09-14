@@ -77,7 +77,43 @@ export function useInstallationsApi() {
     }
   }
 
+  // Remove ONE repo from Olivia: GitHub access + everything stored for it. The
+  // connection and the other repos stay. `authRequired` means the user has to
+  // sign in with GitHub once — GitHub only lets a user remove a repo.
+  const removeRepo = async (
+    installationId: number | string,
+    repo: string,
+    deleteMcpProjects: boolean
+  ): Promise<
+    | { ok: true; mcpProjectsDeleted: number }
+    | { authRequired: true }
+    | { error: string }
+  > => {
+    try {
+      const res = await fetch(
+        `${BASE_URL}/api/installations/${installationId}/repos/${encodeURIComponent(repo)}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${getAuthToken()}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ deleteMcpProjects }),
+        }
+      )
+      const body = await res.json().catch(() => ({}))
+      if (res.status === 409 && body?.code === "GITHUB_AUTH_REQUIRED") {
+        return { authRequired: true }
+      }
+      if (!res.ok) return { error: body?.message || "Could not remove the repo." }
+      return { ok: true, mcpProjectsDeleted: body?.mcpProjectsDeleted ?? 0 }
+    } catch {
+      return { error: "Could not remove the repo." }
+    }
+  }
+
   return {
+    removeRepo,
     installations,
     loading,
     error,

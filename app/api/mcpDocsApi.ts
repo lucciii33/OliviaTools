@@ -856,3 +856,12 @@ export async function deleteMcpToolSuite(suiteId: string) {
   )
   return readJson<{ success: boolean }>(res)
 }
+
+/** Delete an MCP project and everything under it (tools, docs, tests, runs, bugs). */
+export async function deleteMcpProject(projectId: string) {
+  const res = await apiFetch(
+    `/api/mcp-lab/projects/${encodeURIComponent(projectId)}`,
+    { method: "DELETE" }
+  )
+  return readJson<{ success: boolean }>(res)
+}

@@ -80,6 +80,7 @@ import {
   type McpTransport,
   type McpTrialLimitAction,
   generateMcpToolSuite,
+  deleteMcpProject,
 } from "~/api/mcpDocsApi"
 import { cn } from "~/lib/utils"
 
@@ -1209,6 +1210,10 @@ export default function McpDocs() {
                   >
                     QA Runs
                   </Link>
+                  <DeleteMcpProjectButton
+                    projectId={activeProjectId}
+                    projectName={projectName || "this project"}
+                  />
                 </div>
               )}
             </div>
@@ -2412,6 +2417,45 @@ function ProjectBugs({
         })}
       </div>
     </section>
+  )
+}
+
+// Deletes the open MCP project and everything under it. Reloads the page on
+// success so the project list, sidebar and counters all come back consistent.
+function DeleteMcpProjectButton({
+  projectId,
+  projectName,
+}: {
+  projectId: string
+  projectName: string
+}) {
+  const [busy, setBusy] = useState(false)
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={async () => {
+        if (
+          !window.confirm(
+            `Delete ${projectName}? Its tools, docs, tests, QA runs, bugs and watchers will be deleted. This can't be undone.`
+          )
+        ) {
+          return
+        }
+        setBusy(true)
+        try {
+          await deleteMcpProject(projectId)
+          window.location.href = "/mcp-docs"
+        } catch (err) {
+          setBusy(false)
+          window.alert(err instanceof Error ? err.message : "Could not delete the project.")
+        }
+      }}
+      className="text-xs text-red-300 hover:text-red-200 inline-flex items-center gap-1 disabled:opacity-50"
+    >
+      {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+      Delete project
+    </button>
   )
 }
 

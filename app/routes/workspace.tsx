@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react"
 import { Link, Navigate } from "react-router"
 import { AlertTriangle, ArrowLeft, Copy, Github, HeartHandshake, KeyRound, Loader2, MailPlus, MessageSquare, RefreshCw, ShieldCheck, ShieldOff, Sparkles, Trash2, Unplug, UserMinus } from "lucide-react"
 import { useInstallationsApi } from "~/api/installationsApi"
+import { fetchGithubReauthLink } from "~/api/githubConnectApi"
 import {
   cancelCompanyInvite,
   deleteSlackConfig,
@@ -85,6 +86,7 @@ export default function Workspace() {
     getInstallations,
     disconnectInstallation,
     disconnecting,
+    removeRepo,
   } = useInstallationsApi()
   const [disconnectTarget, setDisconnectTarget] = useState<string | null>(null)
   const [disconnectError, setDisconnectError] = useState<string | null>(null)
@@ -226,6 +228,91 @@ export default function Workspace() {
       setTwoFaBusy(false)
     }
   }
+
+  // Remove ONE repo (not the whole connection). Stored as a pending action
+  // across the GitHub sign-in redirect, so coming back finishes the job instead
+  // of making the user click again.
+  const [removeTarget, setRemoveTarget] = useState<{
+    installationId: string
+    owner: string
+    repo: string
+  } | null>(null)
+  const [removeMcp, setRemoveMcp] = useState(false)
+  const [removing, setRemoving] = useState(false)
+  const [removeError, setRemoveError] = useState<string | null>(null)
+  const [removeNotice, setRemoveNotice] = useState<string | null>(null)
+  const PENDING_REMOVE_KEY = "olivia.pendingRepoRemoval"
+
+  async function runRemove(target: {
+    installationId: string
+    owner: string
+    repo: string
+  }, deleteMcp: boolean) {
+    setRemoving(true)
+    setRemoveError(null)
+    const result = await removeRepo(target.installationId, target.repo, deleteMcp)
+    if ("authRequired" in result) {
+      try {
+        sessionStorage.setItem(
+          PENDING_REMOVE_KEY,
+          JSON.stringify({ ...target, deleteMcp })
+        )
+      } catch {
+        /* storage blocked — the user just clicks Remove again after signing in */
+      }
+      const url = await fetchGithubReauthLink("/workspace")
+      if (url) {
+        window.location.href = url
+        return
+      }
+      setRemoving(false)
+      setRemoveError("Could not start GitHub sign-in. Try again.")
+      return
+    }
+    setRemoving(false)
+    if ("error" in result) {
+      setRemoveError(result.error)
+      return
+    }
+    for (const r of getKnownRepos().filter(
+      (r) => r.owner === target.owner && r.repo === target.repo,
+    )) {
+      removeKnownRepo(r)
+    }
+    setRemoveTarget(null)
+    setRemoveMcp(false)
+    setRemoveNotice(
+      `${target.owner}/${target.repo} was removed from Olivia` +
+        (result.mcpProjectsDeleted
+          ? `, along with ${result.mcpProjectsDeleted} MCP project${result.mcpProjectsDeleted === 1 ? "" : "s"}.`
+          : "."),
+    )
+    await getInstallations()
+  }
+
+  // Back from the GitHub sign-in: finish the removal that was waiting for it.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get("githubReauthed") !== "1") return
+    let pending: { installationId: string; owner: string; repo: string; deleteMcp: boolean } | null = null
+    try {
+      const raw = sessionStorage.getItem(PENDING_REMOVE_KEY)
+      pending = raw ? JSON.parse(raw) : null
+      sessionStorage.removeItem(PENDING_REMOVE_KEY)
+    } catch {
+      pending = null
+    }
+    params.delete("githubReauthed")
+    const qs = params.toString()
+    window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`)
+    if (pending) {
+      runRemove(
+        { installationId: pending.installationId, owner: pending.owner, repo: pending.repo },
+        pending.deleteMcp,
+      )
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function handleConfirmDisconnect() {
     if (!disconnectTarget) return
@@ -846,6 +933,11 @@ export default function Workspace() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            {removeNotice && (
+              <p className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
+                {removeNotice}
+              </p>
+            )}
             {installationIds.length === 0 && (
               <p className="text-sm text-white/40">No GitHub installations connected.</p>
             )}
@@ -857,9 +949,12 @@ export default function Workspace() {
                     .map((i) => i.owner),
                 ),
               )
+              const repos = installations.filter(
+                (i) => String(i.installationId) === id,
+              )
               return (
+                <div key={id} className="space-y-1.5">
                 <div
-                  key={id}
                   className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.035] p-3"
                 >
                   <div className="min-w-0 space-y-0.5 text-sm text-white/75">
@@ -880,11 +975,105 @@ export default function Workspace() {
                     Disconnect
                   </Button>
                 </div>
+                {/* Individual repos: remove one without dropping the connection. */}
+                {repos.map((r) => (
+                  <div
+                    key={`${id}-${r.repo}`}
+                    className="ml-4 flex items-center justify-between gap-3 rounded-md border border-white/5 bg-white/[0.02] px-3 py-1.5"
+                  >
+                    <span className="font-mono text-xs text-white/60 truncate">
+                      {r.owner}/{r.repo}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      type="button"
+                      className="h-7 text-xs text-red-300 hover:text-red-200 hover:bg-red-500/10"
+                      onClick={() => {
+                        setRemoveError(null)
+                        setRemoveMcp(false)
+                        setRemoveTarget({ installationId: id, owner: r.owner, repo: r.repo })
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+                </div>
               )
             })}
           </CardContent>
         </Card>
       </main>
+
+      <Dialog
+        open={!!removeTarget}
+        onOpenChange={(open) => {
+          if (!open && !removing) {
+            setRemoveTarget(null)
+            setRemoveError(null)
+          }
+        }}
+      >
+        <DialogContent className="border-white/10 bg-[#101217] text-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-400" />
+              Remove {removeTarget?.owner}/{removeTarget?.repo}?
+            </DialogTitle>
+            <DialogDescription className="text-white/50 pt-1">
+              Olivia loses access to this repo and deletes everything it stored
+              for it: docs, tests, bugs, QA runs and watchers. Your other repos
+              and the GitHub connection stay as they are.
+            </DialogDescription>
+          </DialogHeader>
+          <label className="flex items-start gap-2 text-sm text-white/70 cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={removeMcp}
+              onChange={(e) => setRemoveMcp(e.target.checked)}
+              disabled={removing}
+            />
+            <span>
+              Also delete the MCP projects linked to this repo
+              <span className="block text-xs text-white/35">
+                Their tools, docs, tests and runs.
+              </span>
+            </span>
+          </label>
+          {removeError && (
+            <p className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+              {removeError}
+            </p>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="outline"
+              type="button"
+              className="border-white/15 text-white/70 hover:bg-white/10"
+              disabled={removing}
+              onClick={() => setRemoveTarget(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              type="button"
+              disabled={removing}
+              onClick={() => removeTarget && runRemove(removeTarget, removeMcp)}
+            >
+              {removing ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="h-3.5 w-3.5" />
+              )}
+              Remove repo
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={!!disconnectTarget}

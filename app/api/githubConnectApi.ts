@@ -28,3 +28,20 @@ export function useGithubConnectLink() {
 
   return { connectUrl, loading, getConnectLink }
 }
+
+// A sign-in-only GitHub link: captures the user's GitHub token and returns them
+// to `returnTo` in Olivia (not to the install screen). Needed before actions only
+// a GitHub user can perform, like removing a repo.
+export async function fetchGithubReauthLink(returnTo: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `${BASE_URL}/api/github/connect-link?purpose=reauth&returnTo=${encodeURIComponent(returnTo)}`,
+      { headers: { Authorization: `Bearer ${getAuthToken()}` } }
+    )
+    if (!res.ok) return null
+    const data = await res.json()
+    return data?.url ?? null
+  } catch {
+    return null
+  }
+}
