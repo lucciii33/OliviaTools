@@ -11,6 +11,14 @@ export interface Installation {
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? ""
 
+export interface RemovedRepo {
+  installationId: number
+  owner: string
+  repo: string
+  fullName?: string
+  removedAt?: string
+}
+
 export function useInstallationsApi() {
   const [installations, setInstallations] = useState<Installation[]>([])
   const [loading, setLoading] = useState(false)
@@ -112,8 +120,40 @@ export function useInstallationsApi() {
     }
   }
 
+  // Repos removed inside Olivia (they can be reconnected, empty).
+  const getRemovedRepos = async (): Promise<RemovedRepo[]> => {
+    try {
+      const res = await fetch(`${BASE_URL}/api/installations/removed`, {
+        headers: { Authorization: `Bearer ${getAuthToken()}` },
+      })
+      if (!res.ok) return []
+      return await res.json()
+    } catch {
+      return []
+    }
+  }
+
+  const restoreRepo = async (
+    installationId: number | string,
+    repo: string
+  ): Promise<{ ok: true } | { error: string }> => {
+    try {
+      const res = await fetch(
+        `${BASE_URL}/api/installations/${installationId}/repos/${encodeURIComponent(repo)}/restore`,
+        { method: "POST", headers: { Authorization: `Bearer ${getAuthToken()}` } }
+      )
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) return { error: body?.message || "Could not reconnect the repo." }
+      return { ok: true }
+    } catch {
+      return { error: "Could not reconnect the repo." }
+    }
+  }
+
   return {
     removeRepo,
+    getRemovedRepos,
+    restoreRepo,
     installations,
     loading,
     error,
