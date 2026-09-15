@@ -83,6 +83,7 @@ import {
   deleteMcpProject,
 } from "~/api/mcpDocsApi"
 import { cn } from "~/lib/utils"
+import { WatcherRunningBanner } from "~/components/WatcherRunningBanner"
 
 const fieldClass =
   "bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-blue-500/50"
@@ -1217,6 +1218,14 @@ export default function McpDocs() {
                 </div>
               )}
             </div>
+
+            {activeProjectId && (
+              <WatcherRunningBanner
+                kind="mcp"
+                projectId={activeProjectId}
+                onFinished={() => refreshDocs(activeProjectId)}
+              />
+            )}
 
             {(refreshing || projectLoading) && docs.length === 0 && (
               <div className="flex items-center justify-center py-24">

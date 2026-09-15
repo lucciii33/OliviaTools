@@ -6,6 +6,8 @@ import { apiFetch } from "~/utils/api"
 
 export interface Watcher {
   _id: string
+  // Chosen by the user. Older watchers have "" — show the repo instead.
+  name?: string
   owner: string
   repo: string
   branch: string
@@ -100,6 +102,7 @@ export async function listWatchers() {
 }
 
 export async function createWatcher(payload: {
+  name: string
   owner: string
   repo: string
   branch?: string
@@ -115,6 +118,7 @@ export async function createWatcher(payload: {
 export async function updateWatcher(
   id: string,
   payload: {
+    name?: string
     enabled?: boolean
     branch?: string
     actions?: { regenerateDocs?: boolean; generateTests?: boolean }
@@ -148,6 +152,32 @@ export async function listWatcherRuns(watcherId?: string) {
   return readJson<WatcherRun[]>(await apiFetch(url, { cache: "no-store" }))
 }
 
+// A watcher run in flight, for the "running" banner on a docs or MCP page.
+export interface ActiveWatcherRun {
+  _id: string
+  status: "pending" | "running"
+  watcherName: string
+  branch: string
+  prNumber: number | null
+  prTitle: string
+  checks?: number
+  startedAt: string
+}
+
+export async function listActiveWatcherRuns(owner: string, repo: string) {
+  const qs = new URLSearchParams({ owner, repo }).toString()
+  return readJson<ActiveWatcherRun[]>(
+    await apiFetch(`/api/watchers/runs/active?${qs}`, { cache: "no-store" })
+  )
+}
+
+export async function listActiveMcpWatcherRuns(projectId: string) {
+  const qs = new URLSearchParams({ projectId }).toString()
+  return readJson<ActiveWatcherRun[]>(
+    await apiFetch(`/api/mcp-watchers/runs/active?${qs}`, { cache: "no-store" })
+  )
+}
+
 export async function listNewEndpoints() {
   return readJson<NewEndpoint[]>(
     await apiFetch("/api/watchers/new-endpoints/all", { cache: "no-store" })
@@ -173,6 +203,7 @@ export async function acknowledgeNewEndpoints(docIds?: string[]) {
 
 export interface McpWatcher {
   _id: string
+  name?: string
   mcpProjectId: string
   projectName: string
   owner: string
@@ -243,6 +274,7 @@ export async function listMcpWatchers() {
 }
 
 export async function createMcpWatcher(payload: {
+  name: string
   mcpProjectId: string
   owner: string
   repo: string
@@ -259,6 +291,7 @@ export async function createMcpWatcher(payload: {
 export async function updateMcpWatcher(
   id: string,
   payload: {
+    name?: string
     enabled?: boolean
     branch?: string
     actions?: Partial<McpWatcher["actions"]>

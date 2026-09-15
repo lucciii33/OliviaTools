@@ -30,6 +30,7 @@ import {
 } from "~/api/watcherApi";
 import { cn } from "~/lib/utils";
 import { McpWatchersSection } from "~/components/McpWatchersSection";
+import { WatcherName } from "~/components/WatcherName"
 
 // Watchers.
 //
@@ -50,6 +51,7 @@ export default function WatchersPage() {
   const [adding, setAdding] = useState(false);
   const [pickRepo, setPickRepo] = useState("");
   const [pickBranch, setPickBranch] = useState("main");
+  const [pickName, setPickName] = useState("");
 
   async function refresh() {
     try {
@@ -88,12 +90,18 @@ export default function WatchersPage() {
   }, [installations, watchers]);
 
   async function handleAdd() {
-    if (!pickRepo) return;
+    if (!pickRepo || !pickName.trim()) return;
     const [owner, repo] = pickRepo.split("/");
     setAdding(true);
     try {
-      await createWatcher({ owner, repo, branch: pickBranch || "main" });
+      await createWatcher({
+        name: pickName.trim(),
+        owner,
+        repo,
+        branch: pickBranch || "main",
+      });
       setPickRepo("");
+      setPickName("");
       await refresh();
     } catch (err) {
       setError(
@@ -224,6 +232,13 @@ export default function WatchersPage() {
             Watch a repo
           </p>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              value={pickName}
+              onChange={(e) => setPickName(e.target.value)}
+              placeholder="Name (e.g. Orders API prod)"
+              maxLength={80}
+              className="sm:w-52 bg-white/[0.04] border border-white/10 rounded px-2 py-1.5 text-sm text-white/80 placeholder:text-white/25 focus:outline-none focus:border-white/25"
+            />
             <select
               value={pickRepo}
               onChange={(e) => setPickRepo(e.target.value)}
@@ -253,7 +268,7 @@ export default function WatchersPage() {
               size="sm"
               className="gap-1.5"
               onClick={handleAdd}
-              disabled={adding || !pickRepo}
+              disabled={adding || !pickRepo || !pickName.trim()}
             >
               {adding ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -293,9 +308,19 @@ export default function WatchersPage() {
                     w.enabled ? "bg-emerald-400" : "bg-white/20",
                   )}
                 />
-                <span className="font-mono text-sm text-white/85">
-                  {w.owner}/{w.repo}
-                </span>
+                <WatcherName
+                  name={w.name}
+                  fallback={`${w.owner}/${w.repo}`}
+                  onRename={async (name) => {
+                    await updateWatcher(w._id, { name });
+                    refresh();
+                  }}
+                />
+                {w.name && (
+                  <span className="font-mono text-[11px] text-white/45">
+                    {w.owner}/{w.repo}
+                  </span>
+                )}
                 <span className="text-[11px] text-white/35 font-mono">
                   {w.branch}
                 </span>

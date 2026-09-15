@@ -5,6 +5,7 @@ import { Button } from "~/components/ui/button"
 import { Sidebar } from "~/components/Sidebar"
 import { DocCard } from "~/components/DocCard"
 import { BackfillDialog } from "~/components/BackfillDialog"
+import { WatcherRunningBanner } from "~/components/WatcherRunningBanner"
 import { useAuth } from "~/context/AuthContext"
 import { useDocsApi } from "~/api/docsApi"
 import { addKnownRepo } from "~/lib/knownRepos"
@@ -98,6 +99,15 @@ export default function DocsRepo() {
             </Button>
           </div>
         </div>
+
+        {owner && repo && (
+          <WatcherRunningBanner
+            kind="api"
+            owner={owner}
+            repo={repo}
+            onFinished={() => getDocs(repo)}
+          />
+        )}
 
         {loading && (
           <div className="flex items-center justify-center py-24">

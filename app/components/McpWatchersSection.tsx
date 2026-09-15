@@ -28,6 +28,7 @@ import {
   type NewTool,
 } from "~/api/watcherApi"
 import { cn } from "~/lib/utils"
+import { WatcherName } from "~/components/WatcherName"
 
 // MCP watchers — the MCP half of the Watchers page.
 //
@@ -50,6 +51,7 @@ export function McpWatchersSection() {
   const [pickProject, setPickProject] = useState("")
   const [pickRepo, setPickRepo] = useState("")
   const [pickBranch, setPickBranch] = useState("main")
+  const [pickName, setPickName] = useState("")
 
   async function refresh() {
     try {
@@ -101,11 +103,12 @@ export function McpWatchersSection() {
   }, [installations])
 
   async function handleAdd() {
-    if (!pickProject || !pickRepo) return
+    if (!pickProject || !pickRepo || !pickName.trim()) return
     const [owner, repo] = pickRepo.split("/")
     setAdding(true)
     try {
       await createMcpWatcher({
+        name: pickName.trim(),
         mcpProjectId: pickProject,
         owner,
         repo,
@@ -113,6 +116,7 @@ export function McpWatchersSection() {
       })
       setPickProject("")
       setPickRepo("")
+      setPickName("")
       await refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not add the watcher")
@@ -184,6 +188,13 @@ export function McpWatchersSection() {
           Watch an MCP server
         </p>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <input
+            value={pickName}
+            onChange={(e) => setPickName(e.target.value)}
+            placeholder="Name (e.g. Inventory MCP)"
+            maxLength={80}
+            className="sm:w-44 bg-white/[0.04] border border-white/10 rounded px-2 py-1.5 text-sm text-white/80 placeholder:text-white/25 focus:outline-none focus:border-white/25"
+          />
           <select
             value={pickProject}
             onChange={(e) => setPickProject(e.target.value)}
@@ -222,7 +233,7 @@ export function McpWatchersSection() {
             type="button"
             className="gap-1.5"
             onClick={handleAdd}
-            disabled={adding || !pickProject || !pickRepo}
+            disabled={adding || !pickProject || !pickRepo || !pickName.trim()}
           >
             {adding ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -255,7 +266,17 @@ export function McpWatchersSection() {
                     w.enabled ? "bg-emerald-400" : "bg-white/20"
                   )}
                 />
-                <span className="text-sm text-white/85">{w.projectName}</span>
+                <WatcherName
+                  name={w.name}
+                  fallback={w.projectName}
+                  onRename={async (name) => {
+                    await updateMcpWatcher(w._id, { name })
+                    refresh()
+                  }}
+                />
+                {w.name && (
+                  <span className="text-[11px] text-white/45">{w.projectName}</span>
+                )}
                 <span className="text-[11px] text-white/35 font-mono">
                   ← {w.owner}/{w.repo} · {w.branch}
                 </span>
