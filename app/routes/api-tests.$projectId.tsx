@@ -11,6 +11,7 @@ import {
   XCircle,
   AlertTriangle,
   KeyRound,
+  Trash2,
 } from "lucide-react"
 import { Sidebar } from "~/components/Sidebar"
 import { Button } from "~/components/ui/button"
@@ -20,6 +21,8 @@ import { QaConfigDialog } from "~/components/QaConfigDialog"
 import { ProjectAuthDialog } from "~/components/ProjectAuthDialog"
 import { EndpointVariables } from "~/components/EndpointVariables"
 import { AuthSchemePicker } from "~/components/AuthSchemePicker"
+import { ResponseShapePanel } from "~/components/ResponseShapePanel"
+import { AddTestCase } from "~/components/AddTestCase"
 import {
   useQaApi,
   type ApiProject,
@@ -48,6 +51,8 @@ export default function ApiTestsPage() {
     listRepoSuites,
     runSuite,
     refineSuiteCase,
+    createSuiteCase,
+    deleteSuiteCase,
     generateSectionSuites,
     generateRepoSectionSuites,
     listProjects,
@@ -277,6 +282,10 @@ export default function ApiTestsPage() {
                   onRun={handleRun}
                   onRefine={refineSuiteCase}
                   onRefined={refresh}
+                  onCreateCase={async (suiteId, instruction) =>
+                    Boolean(await createSuiteCase(suiteId, instruction))
+                  }
+                  onDeleteCase={deleteSuiteCase}
                 />
               ))}
             </div>
@@ -311,6 +320,8 @@ function EndpointCard({
   onRun,
   onRefine,
   onRefined,
+  onCreateCase,
+  onDeleteCase,
 }: {
   endpointKey: string
   suites: ApiSuite[]
@@ -323,6 +334,8 @@ function EndpointCard({
     instruction: string
   ) => Promise<ApiTestCase | null>
   onRefined: () => void
+  onCreateCase: (suiteId: string, instruction: string) => Promise<boolean>
+  onDeleteCase: (suiteId: string, caseId: string) => Promise<boolean>
 }) {
   const [open, setOpen] = useState(false)
   // Read the endpoint off the suites themselves rather than re-parsing the
@@ -358,6 +371,16 @@ function EndpointCard({
             docId={String(suites[0]?.docId || "")}
             defaultOpen
           />
+          {/* What this endpoint answers with — the field names you write the
+              checks against. */}
+          {(suites[0]?.responses || []).map((r, i) => (
+            <ResponseShapePanel
+              key={i}
+              title={`Response ${r.status}`}
+              subtitle={r.description || ""}
+              value={r.example}
+            />
+          ))}
           {suites.map((suite) => (
             <SuiteBlock
               key={suite._id}
@@ -367,6 +390,8 @@ function EndpointCard({
               onRun={() => onRun(suite._id)}
               onRefine={onRefine}
               onRefined={onRefined}
+              onCreateCase={onCreateCase}
+              onDeleteCase={onDeleteCase}
             />
           ))}
         </div>
@@ -382,6 +407,8 @@ function SuiteBlock({
   onRun,
   onRefine,
   onRefined,
+  onCreateCase,
+  onDeleteCase,
 }: {
   suite: ApiSuite
   run?: SuiteRunResult
@@ -393,6 +420,8 @@ function SuiteBlock({
     instruction: string
   ) => Promise<ApiTestCase | null>
   onRefined: () => void
+  onCreateCase: (suiteId: string, instruction: string) => Promise<boolean>
+  onDeleteCase: (suiteId: string, caseId: string) => Promise<boolean>
 }) {
   const last = suite.lastRun
   const byCase = useMemo(() => {
@@ -467,8 +496,18 @@ function SuiteBlock({
             result={byCase.get(c._id)}
             onRefine={onRefine}
             onRefined={onRefined}
+            onDelete={async () => {
+              if (await onDeleteCase(suite._id, c._id)) onRefined()
+            }}
           />
         ))}
+        <AddTestCase
+          onCreate={async (instruction) => {
+            const ok = await onCreateCase(suite._id, instruction)
+            if (ok) onRefined()
+            return ok
+          }}
+        />
       </div>
     </div>
   )
@@ -480,6 +519,7 @@ function CaseRow({
   result,
   onRefine,
   onRefined,
+  onDelete,
 }: {
   suiteId: string
   testCase: ApiTestCase
@@ -490,6 +530,7 @@ function CaseRow({
     instruction: string
   ) => Promise<ApiTestCase | null>
   onRefined: () => void
+  onDelete: () => Promise<void>
 }) {
   const [editing, setEditing] = useState(false)
   const [instruction, setInstruction] = useState("")
@@ -532,6 +573,14 @@ function CaseRow({
                 regression
               </span>
             )}
+            <button
+              type="button"
+              title="Delete this test"
+              onClick={onDelete}
+              className="ml-auto text-white/20 hover:text-red-400"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
           </div>
 
           {/* The point of the page: what this test covers, in plain language. */}

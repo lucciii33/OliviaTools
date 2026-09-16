@@ -757,6 +757,10 @@ export interface McpToolSuite {
   group: string
   kind: "smoke" | "regression"
   cases: McpToolTestCase[]
+  // The tool's own schemas, shipped with its tests so you can see which fields
+  // exist to check without opening the docs.
+  inputSchema?: unknown
+  outputSchema?: unknown
   lastRun?: {
     at: string | null
     passed: number
@@ -847,6 +851,26 @@ export async function refineMcpToolSuiteCase(
     { method: "POST", body: JSON.stringify({ instruction }) }
   )
   return readJson<{ case: McpToolTestCase }>(res)
+}
+
+/** Add ONE test by hand: blank, or written from a sentence. */
+export async function createMcpToolSuiteCase(
+  suiteId: string,
+  instruction: string
+) {
+  const res = await apiFetch(
+    `/api/mcp-lab/tool-suites/${encodeURIComponent(suiteId)}/cases`,
+    { method: "POST", body: JSON.stringify({ instruction }) }
+  )
+  return readJson<{ case: McpToolTestCase }>(res)
+}
+
+export async function deleteMcpToolSuiteCase(suiteId: string, caseId: string) {
+  const res = await apiFetch(
+    `/api/mcp-lab/tool-suites/${encodeURIComponent(suiteId)}/cases/${encodeURIComponent(caseId)}`,
+    { method: "DELETE" }
+  )
+  return readJson<{ success: boolean }>(res)
 }
 
 export async function deleteMcpToolSuite(suiteId: string) {

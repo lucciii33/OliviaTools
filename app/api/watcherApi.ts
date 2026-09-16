@@ -121,7 +121,7 @@ export async function updateWatcher(
     name?: string
     enabled?: boolean
     branch?: string
-    actions?: { regenerateDocs?: boolean; generateTests?: boolean }
+    actions?: Partial<Watcher["actions"]>
   }
 ) {
   return readJson<Watcher>(

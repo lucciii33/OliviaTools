@@ -29,6 +29,7 @@ import {
 } from "~/api/watcherApi"
 import { cn } from "~/lib/utils"
 import { WatcherName } from "~/components/WatcherName"
+import { WatcherActionToggles } from "~/components/WatcherActionToggles"
 
 // MCP watchers — the MCP half of the Watchers page.
 //
@@ -318,6 +319,31 @@ export function McpWatchersSection() {
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
+
+                <WatcherActionToggles
+                  actions={w.actions}
+                  specs={[
+                    {
+                      key: "generateTests",
+                      label: "Tests",
+                      title: "Write smoke + regression suites for each new tool",
+                    },
+                    {
+                      key: "runTests",
+                      label: "Run tests",
+                      title: "Invoke the tools to run those suites right away",
+                    },
+                    {
+                      key: "runQa",
+                      label: "Bug hunter",
+                      title: "Hunt for bugs in each new tool and report them",
+                    },
+                  ]}
+                  onToggle={async (key, value) => {
+                    await updateMcpWatcher(w._id, { actions: { [key]: value } })
+                    refresh()
+                  }}
+                />
               </div>
             )
           })}

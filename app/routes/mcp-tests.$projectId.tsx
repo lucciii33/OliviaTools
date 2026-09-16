@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
+  Trash2,
 } from "lucide-react"
 import { Sidebar } from "~/components/Sidebar"
 import { Button } from "~/components/ui/button"
@@ -18,6 +19,8 @@ import {
   listMcpToolSuites,
   runMcpToolSuite,
   refineMcpToolSuiteCase,
+  createMcpToolSuiteCase,
+  deleteMcpToolSuiteCase,
   generateMcpProjectSuites,
   type McpToolSuite,
   type McpToolTestCase,
@@ -25,6 +28,8 @@ import {
   type McpSuiteCaseResult,
 } from "~/api/mcpDocsApi"
 import { cn } from "~/lib/utils"
+import { ResponseShapePanel } from "~/components/ResponseShapePanel"
+import { AddTestCase } from "~/components/AddTestCase"
 
 // Every saved test of one MCP project, organised the way the API tests page is:
 // pick a group, see its tools, and under each tool the tests with the plain
@@ -297,6 +302,16 @@ function ToolCard({
 
       {open && (
         <div className="px-4 pb-4 pl-11 space-y-4">
+          {/* The tool's own schemas — the field names the checks are written
+              against, without opening the docs. */}
+          <ResponseShapePanel
+            title="Arguments"
+            value={suites[0]?.inputSchema}
+          />
+          <ResponseShapePanel
+            title="Response"
+            value={suites[0]?.outputSchema}
+          />
           {suites.map((suite) => (
             <SuiteBlock
               key={suite._id}
@@ -400,8 +415,27 @@ function SuiteBlock({
             testCase={c}
             result={byCase.get(c._id)}
             onRefined={onRefined}
+            onDelete={async () => {
+              try {
+                await deleteMcpToolSuiteCase(suite._id, c._id)
+                onRefined()
+              } catch {
+                /* surfaced by the page-level error state on the next load */
+              }
+            }}
           />
         ))}
+        <AddTestCase
+          onCreate={async (instruction) => {
+            try {
+              await createMcpToolSuiteCase(suite._id, instruction)
+              onRefined()
+              return true
+            } catch {
+              return false
+            }
+          }}
+        />
       </div>
     </div>
   )
@@ -412,11 +446,13 @@ function CaseRow({
   testCase: c,
   result,
   onRefined,
+  onDelete,
 }: {
   suiteId: string
   testCase: McpToolTestCase
   result?: McpSuiteCaseResult
   onRefined: () => void
+  onDelete: () => Promise<void>
 }) {
   const [editing, setEditing] = useState(false)
   const [instruction, setInstruction] = useState("")
@@ -469,6 +505,14 @@ function CaseRow({
                 regression
               </span>
             )}
+            <button
+              type="button"
+              title="Delete this test"
+              onClick={onDelete}
+              className="ml-auto text-white/20 hover:text-red-400"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
           </div>
 
           {c.covers && (

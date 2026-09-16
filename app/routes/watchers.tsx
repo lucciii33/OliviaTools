@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Plus,
+  Globe,
 } from "lucide-react";
 import { Sidebar } from "~/components/Sidebar";
 import { Button } from "~/components/ui/button";
@@ -31,6 +32,7 @@ import {
 import { cn } from "~/lib/utils";
 import { McpWatchersSection } from "~/components/McpWatchersSection";
 import { WatcherName } from "~/components/WatcherName"
+import { WatcherActionToggles } from "~/components/WatcherActionToggles"
 
 // Watchers.
 //
@@ -161,14 +163,19 @@ export default function WatchersPage() {
           <Eye className="h-5 w-5 text-cyan-400" />
           <h1 className="text-lg font-semibold">Watchers</h1>
         </div>
-        <p className="text-sm text-white/40 mb-2">
-          Watch a repo. When something merges, Olivia regenerates the docs,
-          flags endpoints that weren&apos;t there before, and writes QA for
-          them.
-        </p>
         <p className="text-xs text-white/25 mb-6">
           Nothing to press — a watch runs itself, triggered by GitHub when a
           pull request is merged into the branch you name.
+        </p>
+
+        <div className="flex items-center gap-2 mb-1">
+          <Globe className="h-4 w-4 text-cyan-300" />
+          <h2 className="text-base font-semibold">API servers</h2>
+        </div>
+        <p className="text-sm text-white/40 mb-5">
+          Watch a repo. When something merges, Olivia regenerates the docs,
+          flags endpoints that weren&apos;t there before, and writes QA for
+          them.
         </p>
 
         {error && (
@@ -350,6 +357,36 @@ export default function WatchersPage() {
                     watching · waiting for a merge to {w.branch}
                   </span>
                 )}
+
+                <WatcherActionToggles
+                  actions={w.actions}
+                  specs={[
+                    {
+                      key: "regenerateDocs",
+                      label: "Docs",
+                      title: "Regenerate this repo's docs after a merge",
+                    },
+                    {
+                      key: "generateTests",
+                      label: "Tests",
+                      title: "Write smoke + regression suites for each new endpoint",
+                    },
+                    {
+                      key: "runTests",
+                      label: "Run tests",
+                      title: "Execute those suites against the live API right away",
+                    },
+                    {
+                      key: "runQa",
+                      label: "Bug hunter",
+                      title: "Hunt for bugs in each new endpoint and report them",
+                    },
+                  ]}
+                  onToggle={async (key, value) => {
+                    await updateWatcher(w._id, { actions: { [key]: value } });
+                    refresh();
+                  }}
+                />
 
                 <div className="ml-auto flex items-center gap-1.5">
                   {/* A watcher is passive by definition: it fires on a merge,

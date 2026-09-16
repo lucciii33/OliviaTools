@@ -208,6 +208,13 @@ export interface ApiSuite {
   path: string
   kind: "smoke" | "regression"
   cases: ApiTestCase[]
+  // What the endpoint answers with, straight from its docs — shown next to the
+  // tests so you can see which fields there are to check.
+  responses?: {
+    status: number
+    description?: string
+    example?: unknown
+  }[]
   lastRun?: {
     at: string | null
     passed: number
@@ -767,6 +774,45 @@ export function useQaApi() {
     }
   }
 
+  // Add ONE test by hand. No instruction → a blank test to fill in; with one,
+  // Claude writes the case from that sentence.
+  const createSuiteCase = async (
+    suiteId: string,
+    instruction: string
+  ): Promise<ApiTestCase | null> => {
+    setError(null)
+    try {
+      const res = await apiFetch(`/api/qa/suites/${suiteId}/cases`, {
+        method: "POST",
+        body: JSON.stringify({ instruction }),
+      })
+      if (!res.ok) {
+        const body = await res.text()
+        setError(safeMessage(body) || `Could not add the test (${res.status})`)
+        return null
+      }
+      return ((await res.json()) as { case: ApiTestCase }).case
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not add the test")
+      return null
+    }
+  }
+
+  const deleteSuiteCase = async (
+    suiteId: string,
+    caseId: string
+  ): Promise<boolean> => {
+    setError(null)
+    const res = await apiFetch(`/api/qa/suites/${suiteId}/cases/${caseId}`, {
+      method: "DELETE",
+    })
+    if (!res.ok) {
+      setError(`Could not delete the test (${res.status})`)
+      return false
+    }
+    return true
+  }
+
   const deleteSuite = async (suiteId: string): Promise<boolean> => {
     const res = await apiFetch(`/api/qa/suites/${suiteId}`, { method: "DELETE" })
     if (!res.ok) {
@@ -834,6 +880,8 @@ export function useQaApi() {
     generateRepoSectionSuites,
     runSuite,
     refineSuiteCase,
+    createSuiteCase,
+    deleteSuiteCase,
     deleteSuite,
     getDocVariables,
     saveDocVariables,
