@@ -82,6 +82,10 @@ export function BackfillDialog({
   const finished =
     status?.status === "completed" || status?.status === "failed"
 
+  // Off by default: only files that changed are re-documented. On re-reads
+  // every file — for when the docs look wrong even though the code didn't move.
+  const [force, setForce] = useState(false)
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     const payload = {
@@ -94,7 +98,7 @@ export function BackfillDialog({
     } catch {}
     submittedRef.current = { owner: payload.owner, repo: payload.repo }
     notifiedRef.current = false
-    await start(payload)
+    await start({ ...payload, force })
   }
 
   return (
@@ -138,6 +142,22 @@ export function BackfillDialog({
                 disabled={lockRepo}
               />
             </div>
+            <label className="flex items-start gap-2 text-xs text-white/60 cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={force}
+                onChange={(e) => setForce(e.target.checked)}
+                disabled={starting}
+              />
+              <span>
+                Regenerate everything
+                <span className="block text-[11px] text-white/35">
+                  Re-reads every file, not only the ones that changed. Slower and
+                  uses more tokens. Tests and variables are kept.
+                </span>
+              </span>
+            </label>
             <Button
               type="submit"
               className="w-full bg-blue-600 hover:bg-blue-500 text-white"

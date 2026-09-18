@@ -21,6 +21,8 @@ export interface StartBackfillPayload {
   installationId: number | string
   owner: string
   repo: string
+  // Re-document every file, not only the ones that changed since last time.
+  force?: boolean
 }
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? ""
