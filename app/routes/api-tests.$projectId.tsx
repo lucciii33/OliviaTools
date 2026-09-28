@@ -244,6 +244,13 @@ export default function ApiTestsPage() {
                 {activeSection} · {endpoints.length} endpoint
                 {endpoints.length === 1 ? "" : "s"}
               </p>
+              <Link
+                to={isRepo ? `/api-qa/repo/${owner}/${repo}` : `/api-qa/${projectId}`}
+                className="text-xs text-white/50 hover:text-white/80 mr-3"
+                title="Bugs found here and every bug hunter run"
+              >
+                Bugs
+              </Link>
               <Button
                 size="sm"
                 variant="outline"

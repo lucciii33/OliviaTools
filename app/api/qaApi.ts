@@ -97,6 +97,23 @@ export interface QaRunSummary {
   createdAt: string
 }
 
+// A bug or a run seen from the repo (or project) level: same record plus the
+// endpoint it belongs to, so the page can group without a lookup per row.
+export interface ScopedBug extends BugRecord {
+  docId: string
+  method: string
+  path: string
+  runId?: string
+}
+
+export interface ScopedQaRun extends QaRunSummary {
+  docId: string
+  method: string
+  path: string
+  runId?: string
+  warnings?: unknown[]
+}
+
 export interface SuiteRun {
   runId: string
   suiteRunId: string
@@ -566,6 +583,41 @@ export function useQaApi() {
     return (await res.json()) as BugRecord[]
   }
 
+  // Every bug / run of a whole repo or imported project.
+  const scopePath = (scope: { owner?: string; repo?: string; projectId?: string }) =>
+    scope.projectId
+      ? `/api/qa/projects/${scope.projectId}`
+      : `/api/qa/repos/${scope.owner}/${scope.repo}`
+
+  const listScopeBugs = async (scope: {
+    owner?: string
+    repo?: string
+    projectId?: string
+  }): Promise<ScopedBug[]> => {
+    setError(null)
+    const res = await apiFetch(`${scopePath(scope)}/bugs`, { cache: "no-store" })
+    if (!res.ok) {
+      setError(`Failed to load bugs (${res.status})`)
+      return []
+    }
+    return (await res.json()) as ScopedBug[]
+  }
+
+  const listScopeQaRuns = async (scope: {
+    owner?: string
+    repo?: string
+    projectId?: string
+  }): Promise<ScopedQaRun[]> => {
+    setError(null)
+    const path = scope.projectId ? "qa-runs" : "runs"
+    const res = await apiFetch(`${scopePath(scope)}/${path}`, { cache: "no-store" })
+    if (!res.ok) {
+      setError(`Failed to load runs (${res.status})`)
+      return []
+    }
+    return (await res.json()) as ScopedQaRun[]
+  }
+
   const setBugStatus = async (
     bugId: string,
     status: BugStatus
@@ -867,6 +919,8 @@ export function useQaApi() {
     saveProjectAuth,
     getSectionCollection,
     getBugs,
+    listScopeBugs,
+    listScopeQaRuns,
     setBugStatus,
     deleteBug,
     deleteProject,

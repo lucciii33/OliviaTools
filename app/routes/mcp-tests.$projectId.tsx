@@ -308,9 +308,11 @@ function ToolCard({
             title="Arguments"
             value={suites[0]?.inputSchema}
           />
+          {/* A real response beats a schema: it shows the actual fields. */}
           <ResponseShapePanel
             title="Response"
-            value={suites[0]?.outputSchema}
+            subtitle={suites[0]?.responseExample != null ? "example from a real call" : "schema"}
+            value={suites[0]?.responseExample ?? suites[0]?.outputSchema}
           />
           {suites.map((suite) => (
             <SuiteBlock

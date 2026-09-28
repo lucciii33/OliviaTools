@@ -761,6 +761,8 @@ export interface McpToolSuite {
   // exist to check without opening the docs.
   inputSchema?: unknown
   outputSchema?: unknown
+  // A real response from a verified call (from the tool's docs), when there is one.
+  responseExample?: unknown
   lastRun?: {
     at: string | null
     passed: number

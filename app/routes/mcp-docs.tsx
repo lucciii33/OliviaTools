@@ -1211,6 +1211,13 @@ export default function McpDocs() {
                   >
                     QA Runs
                   </Link>
+                  {/* Coverage, tests and bugs in one page the customer can send on. */}
+                  <Link
+                    to={`/qa-report/${activeProjectId}?surface=mcp`}
+                    className="text-xs text-blue-300 hover:text-blue-200"
+                  >
+                    Report
+                  </Link>
                   <DeleteMcpProjectButton
                     projectId={activeProjectId}
                     projectName={projectName || "this project"}

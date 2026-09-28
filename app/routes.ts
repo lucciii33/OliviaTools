@@ -9,6 +9,8 @@ export default [
   route("reset-password/:token", "routes/reset-password.$token.tsx"),
   route("accept-invite", "routes/accept-invite.tsx"),
   route("workspace", "routes/workspace.tsx"),
+  // Operator back office, guarded by the admin key (not a user session).
+  route("admin", "routes/admin.tsx"),
   route("dashboard", "routes/dashboard.tsx"),
   route("mcp-qa-runs", "routes/mcp-qa-runs.tsx"),
   route("mcp-docs", "routes/mcp-docs.tsx"),
@@ -33,6 +35,17 @@ export default [
   route("api-tests/repo/:owner/:repo", "routes/api-tests.$projectId.tsx", {
     id: "api-tests-repo",
   }),
+  // Bug hunter results for an API repo or imported project: bugs + runs.
+  route("api-qa/:projectId", "routes/api-qa.$projectId.tsx"),
+  route("api-qa/repo/:owner/:repo", "routes/api-qa.$projectId.tsx", {
+    id: "api-qa-repo",
+  }),
+  // QA report for one repo or project, and the public page its share link opens.
+  route("qa-report/:projectId", "routes/qa-report.$projectId.tsx"),
+  route("qa-report/repo/:owner/:repo", "routes/qa-report.$projectId.tsx", {
+    id: "qa-report-repo",
+  }),
+  route("report/:token", "routes/report.$token.tsx"),
   route("e2e-qa", "routes/e2e-qa.tsx"),
   route("academy", "routes/academy.tsx"),
   route("academy/:courseId", "routes/academy.$courseId.tsx"),

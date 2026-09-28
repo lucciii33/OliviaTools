@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router"
-import { ArrowLeft, Loader2, RefreshCw, Rocket, FlaskConical } from "lucide-react"
+import {
+  ArrowLeft,
+  Bug,
+  FileBarChart,
+  Loader2,
+  RefreshCw,
+  Rocket,
+  FlaskConical,
+} from "lucide-react"
 import { Button } from "~/components/ui/button"
 import { Sidebar } from "~/components/Sidebar"
 import { DocCard } from "~/components/DocCard"
@@ -67,6 +75,31 @@ export default function DocsRepo() {
             {/* Always reachable: the saved smoke/regression suites for this repo,
                 grouped by section. Without a fixed entry point the tests page
                 could only be reached right after generating something. */}
+            {/* Where the bug hunter's output lives — the MCP side has had this
+                since the beginning. */}
+            {/* Coverage, tests and bugs in one page the customer can send on. */}
+            <Link to={`/qa-report/repo/${owner}/${repo}`}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-white/15 text-white/70 hover:bg-white/10 gap-1.5"
+                title="QA report: coverage, tests executed and bugs"
+              >
+                <FileBarChart className="h-3.5 w-3.5" />
+                Report
+              </Button>
+            </Link>
+            <Link to={`/api-qa/repo/${owner}/${repo}`}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-white/15 text-white/70 hover:bg-white/10 gap-1.5"
+                title="Bugs found in this repo and every bug hunter run"
+              >
+                <Bug className="h-3.5 w-3.5" />
+                Bugs
+              </Button>
+            </Link>
             <Link to={`/api-tests/repo/${owner}/${repo}`}>
               <Button
                 size="sm"
