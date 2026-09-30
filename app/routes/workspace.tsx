@@ -5,24 +5,23 @@ import { useInstallationsApi, type RemovedRepo } from "~/api/installationsApi"
 import { fetchGithubReauthLink } from "~/api/githubConnectApi"
 import {
   cancelCompanyInvite,
+  deleteCompanyAnthropicKey,
   deleteSlackConfig,
   getCompany,
+  getCompanyAnthropicKey,
   getCompanyMembers,
   getSlackConfig,
   inviteCompanyMember,
   removeCompanyMember,
+  saveCompanyAnthropicKey,
   saveSlackConfig,
   type Company,
+  type CompanyAnthropicKey,
   type CompanyMember,
   type PendingInvite,
   type SlackConfig,
 } from "~/api/companyApi"
-import {
-  deleteAnthropicKey,
-  getMySettings,
-  saveAnthropicKey,
-  type UserSettings,
-} from "~/api/userSettingsApi"
+import { getMySettings, type UserSettings } from "~/api/userSettingsApi"
 import {
   disableTwoFactor,
   setupTwoFactor,
@@ -64,6 +63,9 @@ export default function Workspace() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [settings, setSettings] = useState<UserSettings | null>(null)
+  // The Anthropic key is the WORKSPACE's, not this user's: every member and
+  // every watcher runs on it. Owners only.
+  const [companyKey, setCompanyKey] = useState<CompanyAnthropicKey | null>(null)
   const [anthropicKeyInput, setAnthropicKeyInput] = useState("")
   const [keySaving, setKeySaving] = useState(false)
   const [keyError, setKeyError] = useState<string | null>(null)
@@ -123,17 +125,20 @@ export default function Workspace() {
     setLoading(true)
     setError(null)
     try {
-      const [nextCompany, nextMembers, nextSettings, nextSlack] = await Promise.all([
-        getCompany(),
-        getCompanyMembers(),
-        getMySettings().catch(() => null),
-        getSlackConfig().catch(() => null),
-      ])
+      const [nextCompany, nextMembers, nextSettings, nextSlack, nextKey] =
+        await Promise.all([
+          getCompany(),
+          getCompanyMembers(),
+          getMySettings().catch(() => null),
+          getSlackConfig().catch(() => null),
+          getCompanyAnthropicKey().catch(() => null),
+        ])
       setCompany(nextCompany)
       setMembers(nextMembers.members ?? [])
       setPendingInvites(nextMembers.pendingInvites ?? [])
       if (nextSettings) setSettings(nextSettings)
       if (nextSlack) setSlack(nextSlack)
+      if (nextKey) setCompanyKey(nextKey)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load workspace")
     } finally {
@@ -149,10 +154,12 @@ export default function Workspace() {
     setKeyError(null)
     setKeySuccess(null)
     try {
-      const next = await saveAnthropicKey(trimmed)
-      setSettings(next)
+      const next = await saveCompanyAnthropicKey(trimmed)
+      setCompanyKey(next)
       setAnthropicKeyInput("")
-      setKeySuccess("Your key was saved. Generations will now run on your friend's account.")
+      setKeySuccess(
+        "Saved. Everything this workspace does now runs on your Anthropic account.",
+      )
     } catch (err) {
       setKeyError(err instanceof Error ? err.message : "Failed to save key")
     } finally {
@@ -165,9 +172,9 @@ export default function Workspace() {
     setKeyError(null)
     setKeySuccess(null)
     try {
-      const next = await deleteAnthropicKey()
-      setSettings(next)
-      setKeySuccess("Key removed. Falling back to the default key.")
+      const next = await deleteCompanyAnthropicKey()
+      setCompanyKey(next)
+      setKeySuccess("Key removed. Back to Olivia's account and your plan's budget.")
     } catch (err) {
       setKeyError(err instanceof Error ? err.message : "Failed to remove key")
     } finally {
@@ -778,12 +785,16 @@ export default function Workspace() {
           <CardHeader>
             <CardTitle className="text-base inline-flex items-center gap-2">
               <HeartHandshake className="h-4 w-4 text-cyan-300" />
-              Add your Claude API key
+              Workspace Claude API key
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-white/55 leading-relaxed">
-              Add your Anthropic API key to run your tests on your own account.            </p>
+              Add your Anthropic key and everything this workspace does — every
+              member, and every watcher — runs on your own account instead of
+              Olivia&apos;s. It stops counting against your plan&apos;s budget.
+              {!isOwner && " Only the workspace owner can change it."}
+            </p>
             {keyError && (
               <p className="rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
                 {keyError}
@@ -794,20 +805,20 @@ export default function Workspace() {
                 {keySuccess}
               </p>
             )}
-            {settings?.hasAnthropicKey && (
+            {companyKey?.hasAnthropicKey && (
               <div className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.035] p-3">
                 <div className="inline-flex items-center gap-2 text-sm text-white/75">
                   <KeyRound className="h-4 w-4 text-cyan-300" />
                   Current key:{" "}
                   <span className="font-mono text-white/55">
-                    {settings.anthropicKeyMask || "***"}
+                    {companyKey.anthropicKeyMask || "***"}
                   </span>
                 </div>
                 <Button
                   variant="ghost"
                   size="sm"
                   className="text-white/60 hover:bg-white/10 hover:text-white"
-                  disabled={keySaving}
+                  disabled={keySaving || !isOwner}
                   onClick={() => void handleRemoveKey()}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -829,11 +840,15 @@ export default function Workspace() {
                 <Button
                   type="submit"
                   size="sm"
-                  disabled={keySaving || !anthropicKeyInput.trim()}
+                  disabled={keySaving || !anthropicKeyInput.trim() || !isOwner}
                   className="bg-cyan-400 text-slate-950 hover:bg-cyan-300"
                 >
                   <KeyRound className="h-3.5 w-3.5" />
-                  {keySaving ? "Saving..." : settings?.hasAnthropicKey ? "Replace key" : "Save key"}
+                  {keySaving
+                    ? "Saving..."
+                    : companyKey?.hasAnthropicKey
+                    ? "Replace key"
+                    : "Save key"}
                 </Button>
               </div>
             </form>

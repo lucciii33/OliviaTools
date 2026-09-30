@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Loader2, LogOut, RefreshCw, ShieldCheck } from "lucide-react"
+import { AlertTriangle, Loader2, LogOut, RefreshCw, ShieldCheck } from "lucide-react"
 import { Button } from "~/components/ui/button"
 import {
   clearSimulatedSpend,
@@ -270,7 +270,16 @@ function CompanyRow({
           <p className="text-[11px] text-white/35 truncate">
             {c.ownerEmail || "no owner email"} · {c.members} member
             {c.members === 1 ? "" : "s"}
+            {c.hasOwnKey && " · own Anthropic key"}
           </p>
+          {/* Own key AND spending ours: a key was revoked, or some path never
+              got it. Looks free on the plan, isn't. */}
+          {c.spendingOursAnyway && (
+            <p className="mt-1 inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-300">
+              <AlertTriangle className="h-3 w-3" />
+              has own key but still spending ours ({usd(c.spentUsd)})
+            </p>
+          )}
         </button>
 
         {/* Spend against budget — the number this page exists for. */}

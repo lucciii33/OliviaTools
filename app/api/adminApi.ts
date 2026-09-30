@@ -11,6 +11,10 @@ export interface AdminCompany {
   plan: "free" | "test" | "pro" | "enterprise"
   // What the plan includes: api, mcp, automation, watchers.
   features: string[]
+  // The workspace pays for its own Claude usage...
+  hasOwnKey: boolean
+  // ...but some of its work still billed us. Something fell back.
+  spendingOursAnyway: boolean
   aiBudgetUsd: number | null
   planNote: string
   createdAt: string

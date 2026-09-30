@@ -123,3 +123,28 @@ export async function deleteSlackConfig() {
   const res = await apiFetch("/api/company/slack", { method: "DELETE" })
   return readJson<SlackConfig>(res)
 }
+
+// The WORKSPACE's Anthropic key. Everything the workspace does — every member,
+// every watcher — runs on it, and none of it counts against the plan's budget.
+export interface CompanyAnthropicKey {
+  anthropicKeyMask: string | null
+  hasAnthropicKey: boolean
+}
+
+export async function getCompanyAnthropicKey() {
+  const res = await apiFetch("/api/company/anthropic-key", { cache: "no-store" })
+  return readJson<CompanyAnthropicKey>(res)
+}
+
+export async function saveCompanyAnthropicKey(apiKey: string) {
+  const res = await apiFetch("/api/company/anthropic-key", {
+    method: "PUT",
+    body: JSON.stringify({ apiKey }),
+  })
+  return readJson<CompanyAnthropicKey>(res)
+}
+
+export async function deleteCompanyAnthropicKey() {
+  const res = await apiFetch("/api/company/anthropic-key", { method: "DELETE" })
+  return readJson<CompanyAnthropicKey>(res)
+}

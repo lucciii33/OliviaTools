@@ -24,6 +24,9 @@ export function LimitReachedDialog() {
 
   const isBudget = limit.code === "AI_BUDGET_EXCEEDED"
   const notIncluded = limit.code === "PLAN_SURFACE_NOT_INCLUDED"
+  // The workspace runs on its own Anthropic key and that key is the problem —
+  // nothing to do with Olivia's limits, so it must not read like one.
+  const keyProblem = limit.code === "CUSTOMER_KEY_PROBLEM"
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-5">
@@ -35,6 +38,8 @@ export function LimitReachedDialog() {
               ? "Monthly limit reached"
               : notIncluded
               ? "Not included in your plan"
+              : keyProblem
+              ? "Your Anthropic key needs attention"
               : "Trial limit reached"}
           </h2>
         </div>
