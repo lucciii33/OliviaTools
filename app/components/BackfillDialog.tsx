@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog"
 import { Button } from "~/components/ui/button"
+import { useInstallationsApi } from "~/api/installationsApi"
 import { Input } from "~/components/ui/input"
 import { Badge } from "~/components/ui/badge"
 import {
@@ -43,9 +44,30 @@ export function BackfillDialog({
   const [installationId, setInstallationId] = useState("")
   const [owner, setOwner] = useState(defaults?.owner ?? "")
   const [repo, setRepo] = useState(defaults?.repo ?? "")
+  // The connected repos, so this is a choice instead of three fields to type.
+  // Typing them by hand (and remembering the last values in localStorage) is
+  // how a stale "admin" got submitted and came back as a GitHub 404.
+  const { installations, getInstallations } = useInstallationsApi()
   const { status, error, starting, start, reset } = useBackfillJob()
   const submittedRef = useRef<{ owner: string; repo: string } | null>(null)
   const notifiedRef = useRef(false)
+
+  useEffect(() => {
+    if (open) void getInstallations()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  // A repo that isn't connected any more must not survive in the form.
+  useEffect(() => {
+    if (!installations.length || lockRepo) return
+    const known = installations.some((i) => i.owner === owner && i.repo === repo)
+    if (known) return
+    const first = installations[0]
+    setOwner(first.owner)
+    setRepo(first.repo)
+    setInstallationId(String(first.installationId))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [installations, lockRepo])
 
   useEffect(() => {
     try {
@@ -116,32 +138,66 @@ export function BackfillDialog({
 
         {!status && !error && (
           <form onSubmit={handleSubmit} className="space-y-3">
-            <Field
-              label="Installation ID"
-              value={installationId}
-              onChange={setInstallationId}
-              placeholder="12345678"
-              required
-              inputMode="numeric"
-            />
-            <div className="grid grid-cols-2 gap-3">
-              <Field
-                label="Owner"
-                value={owner}
-                onChange={setOwner}
-                placeholder="my-org"
-                required
-                disabled={lockRepo}
-              />
-              <Field
-                label="Repo"
-                value={repo}
-                onChange={setRepo}
-                placeholder="my-repo"
-                required
-                disabled={lockRepo}
-              />
-            </div>
+            {installations.length > 0 && !lockRepo ? (
+              <div className="space-y-1">
+                <label className="text-xs text-white/60">Repository</label>
+                <select
+                  value={`${owner}/${repo}`}
+                  onChange={(e) => {
+                    const picked = installations.find(
+                      (i) => `${i.owner}/${i.repo}` === e.target.value,
+                    )
+                    if (!picked) return
+                    setOwner(picked.owner)
+                    setRepo(picked.repo)
+                    setInstallationId(String(picked.installationId))
+                  }}
+                  className="w-full rounded-md bg-white/5 border border-white/15 px-3 py-2 text-sm text-white focus:outline-none focus:border-white/30"
+                >
+                  {installations.map((i) => (
+                    <option
+                      key={`${i.installationId}-${i.owner}/${i.repo}`}
+                      value={`${i.owner}/${i.repo}`}
+                      className="bg-[#0d0d14]"
+                    >
+                      {i.owner}/{i.repo}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-white/35">
+                  Only repos connected through GitHub are listed.
+                </p>
+              </div>
+            ) : (
+              <>
+                <Field
+                  label="Installation ID"
+                  value={installationId}
+                  onChange={setInstallationId}
+                  placeholder="12345678"
+                  required
+                  inputMode="numeric"
+                />
+                <div className="grid grid-cols-2 gap-3">
+                  <Field
+                    label="Owner"
+                    value={owner}
+                    onChange={setOwner}
+                    placeholder="my-org"
+                    required
+                    disabled={lockRepo}
+                  />
+                  <Field
+                    label="Repo"
+                    value={repo}
+                    onChange={setRepo}
+                    placeholder="my-repo"
+                    required
+                    disabled={lockRepo}
+                  />
+                </div>
+              </>
+            )}
             <label className="flex items-start gap-2 text-xs text-white/60 cursor-pointer">
               <input
                 type="checkbox"
