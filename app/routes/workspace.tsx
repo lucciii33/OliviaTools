@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react"
 import { Link, Navigate } from "react-router"
-import { AlertTriangle, ArrowLeft, Copy, Github, HeartHandshake, KeyRound, Loader2, MailPlus, MessageSquare, RefreshCw, RotateCcw, ShieldCheck, ShieldOff, Sparkles, Trash2, Unplug, UserMinus } from "lucide-react"
+import { AlertTriangle, ArrowLeft, Copy, Eye, EyeOff, Github, HeartHandshake, KeyRound, Loader2, MailPlus, MessageSquare, RefreshCw, RotateCcw, ShieldCheck, ShieldOff, Sparkles, Trash2, Unplug, UserMinus } from "lucide-react"
 import { useInstallationsApi, type RemovedRepo } from "~/api/installationsApi"
 import { fetchGithubReauthLink } from "~/api/githubConnectApi"
 import {
@@ -66,6 +66,9 @@ export default function Workspace() {
   // The Anthropic key is the WORKSPACE's, not this user's: every member and
   // every watcher runs on it. Owners only.
   const [companyKey, setCompanyKey] = useState<CompanyAnthropicKey | null>(null)
+  // Pasting a 100-character key and not being able to check it is how a typo
+  // gets saved and comes back later as "Olivia is broken".
+  const [showKey, setShowKey] = useState(false)
   const [anthropicKeyInput, setAnthropicKeyInput] = useState("")
   const [keySaving, setKeySaving] = useState(false)
   const [keyError, setKeyError] = useState<string | null>(null)
@@ -828,14 +831,29 @@ export default function Workspace() {
             )}
             <form onSubmit={handleSaveKey} className="space-y-2">
               <label className="text-xs text-white/60">Anthropic API key</label>
-              <Input
-                type="password"
-                value={anthropicKeyInput}
-                onChange={(e) => setAnthropicKeyInput(e.target.value)}
-                placeholder="sk-ant-..."
-                autoComplete="off"
-                className="bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-cyan-500/50 font-mono"
-              />
+              <div className="relative">
+                <Input
+                  type={showKey ? "text" : "password"}
+                  value={anthropicKeyInput}
+                  onChange={(e) => setAnthropicKeyInput(e.target.value)}
+                  placeholder="sk-ant-..."
+                  autoComplete="off"
+                  className="bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-cyan-500/50 font-mono pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowKey((v) => !v)}
+                  title={showKey ? "Hide key" : "Show key"}
+                  aria-label={showKey ? "Hide key" : "Show key"}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-white/35 hover:text-white/80"
+                >
+                  {showKey ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
               <div className="flex justify-end">
                 <Button
                   type="submit"
