@@ -108,46 +108,67 @@ const workflow = [
   },
 ];
 
+// The plans, as the website states them. They mirror what the backend actually
+// enforces (usageLimitService.PLANS): which parts of Olivia a plan unlocks, and
+// how much Claude work it includes. Merge counts are the customer-facing way of
+// saying that budget — a merge that touches many files eats more of it, which
+// is what the note under the grid says.
 const pricingTiers = [
   {
-    name: "Normal",
-    price: 25,
-    tagline: "For individuals documenting a single API or MCP server.",
+    name: "Free",
+    price: 0,
+    tagline: "Enough to see it work on one repo or one MCP server.",
     features: [
-      "API docs from one repository",
-      "MCP docs for one server",
-      "Smoke QA runs",
-      "Bug reports with evidence",
+      "1 repository and 1 MCP project",
+      "3 doc generations a month",
+      "5 bug hunter runs a month",
+      "API docs, MCP docs and tests",
+      "No watchers",
     ],
-    cta: "Start with Normal",
+    cta: "Start free",
+    highlighted: false,
+  },
+  {
+    name: "MCP",
+    price: 99,
+    tagline: "For teams whose product is an MCP server.",
+    features: [
+      "Unlimited MCP projects and tools",
+      "Tool docs, smoke and regression tests",
+      "MCP bug hunter, no monthly cap",
+      "Watcher: re-checks your server after every merge",
+      "The API side is not included",
+    ],
+    cta: "Start with MCP",
     highlighted: false,
   },
   {
     name: "Pro",
-    price: 100,
-    tagline: "For teams shipping APIs and MCP servers continuously.",
+    price: 499,
+    tagline: "For a team shipping an API and MCP servers continuously.",
     features: [
-      "Everything in Normal",
-      "Unlimited repositories and servers",
-      "PR change updates and backfills",
-      "Regression QA suites",
-      "Priority support",
+      "Up to 5 repositories, unlimited MCP projects",
+      "Docs, tests and bug hunter on both sides",
+      "Watchers on merge: new endpoints documented and tested by morning",
+      "~200 watched merges a month",
+      "Bring your own Claude key: $299/mo, unlimited usage",
     ],
     cta: "Start with Pro",
     highlighted: true,
   },
   {
     name: "Enterprise",
-    price: 200,
-    tagline: "For organizations that need scale, control, and visibility.",
+    price: 1500,
+    tagline: "For organizations that need scale, control and their own data.",
     features: [
-      "Everything in Pro",
-      "Team workspaces and roles",
-      "SSO and advanced permissions",
-      "Dedicated onboarding",
-      "SLA and dedicated support",
+      "Unlimited repositories and MCP projects",
+      "~700 watched merges a month",
+      "Team workspaces, roles and SSO",
+      "Your own database, or your own region",
+      "Bring your own Claude key: $899/mo, unlimited usage",
+      "Dedicated onboarding, SLA and support",
     ],
-    cta: "Start with Enterprise",
+    cta: "Talk to us",
     highlighted: false,
   },
 ];
@@ -593,7 +614,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* <section id="pricing" className="border-y border-white/10 bg-white/[0.02] px-5 py-12 md:px-8 md:py-16">
+        <section id="pricing" className="border-y border-white/10 bg-white/[0.02] px-5 py-12 md:px-8 md:py-16">
           <div className="mx-auto max-w-7xl">
             <div className="mb-8 max-w-3xl">
               <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200/70">
@@ -603,12 +624,13 @@ export default function Home() {
                 Simple plans for documentation and QA at any scale.
               </h2>
               <p className="mt-3 text-sm leading-6 text-white/55">
-                Start small with a single source, scale to unlimited repositories and servers,
-                or bring your whole organization. Every plan includes docs, QA, and bug reports.
+                Start on one repository, scale to a whole organization. Every plan
+                includes docs, tests and bug reports — the difference is how much of
+                it Olivia does for you, and whether it keeps watching after each merge.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
               {pricingTiers.map((tier) => (
                 <article
                   key={tier.name}
@@ -655,8 +677,19 @@ export default function Home() {
                 </article>
               ))}
             </div>
+
+            {/* The honest footnote: a plan's included work is a budget, and a
+                merge that rewrites twenty files spends more of it than one that
+                fixes a typo. Saying so here prevents the argument later. */}
+            <p className="mt-5 text-xs leading-5 text-white/40">
+              A &ldquo;watched merge&rdquo; is one pull request merged into a branch you
+              watch. Merges that touch many files, or add many endpoints, use more of
+              your monthly allowance than small ones. Run out and Olivia pauses new AI
+              work until the next month — everything already generated stays. Bring
+              your own Claude key and there is no allowance at all.
+            </p>
           </div>
-        </section> */}
+        </section>
 
         <section className="px-5 pb-14 md:px-8 md:pb-20">
           <div className="mx-auto max-w-7xl rounded-lg border border-cyan-300/20 bg-cyan-400/10 p-6 md:flex md:items-center md:justify-between md:gap-8">
