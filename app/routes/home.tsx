@@ -113,45 +113,56 @@ const workflow = [
 // how much Claude work it includes. Merge counts are the customer-facing way of
 // saying that budget — a merge that touches many files eats more of it, which
 // is what the note under the grid says.
+// The plans as the website states them. They mirror what the backend enforces
+// (usageLimitService.PLANS): which half of Olivia a plan unlocks, and how much
+// Claude work it includes. One rule covers bring-your-own-key — 40% off, no
+// usage cap — so there is a single sentence to explain instead of eight prices.
 const pricingTiers = [
-  {
-    name: "Free",
-    price: 0,
-    tagline: "Enough to see it work on one repo or one MCP server.",
-    features: [
-      "1 repository and 1 MCP project",
-      "3 doc generations a month",
-      "5 bug hunter runs a month",
-      "API docs, MCP docs and tests",
-      "No watchers",
-    ],
-    cta: "Start free",
-    highlighted: false,
-  },
   {
     name: "MCP",
     price: 99,
+    byok: 59,
     tagline: "For teams whose product is an MCP server.",
     features: [
-      "Unlimited MCP projects and tools",
+      "Up to 3 MCP projects, unlimited tools",
       "Tool docs, smoke and regression tests",
       "MCP bug hunter, no monthly cap",
       "Watcher: re-checks your server after every merge",
+      "~400 tool docs a month",
       "The API side is not included",
     ],
     cta: "Start with MCP",
     highlighted: false,
   },
   {
+    name: "API",
+    price: 180,
+    byok: 108,
+    tagline: "For teams documenting and testing their own API.",
+    features: [
+      "Up to 3 repositories",
+      "Endpoint docs straight from the code",
+      "Smoke and regression tests per endpoint",
+      "Bug hunter with real requests and evidence",
+      "Watcher: new endpoints documented and tested after every merge",
+      "~60 watched merges a month",
+      "The MCP side is not included",
+    ],
+    cta: "Start with API",
+    highlighted: false,
+  },
+  {
     name: "Pro",
     price: 499,
-    tagline: "For a team shipping an API and MCP servers continuously.",
+    byok: 299,
+    tagline: "Both sides, for a team shipping continuously.",
     features: [
+      "Everything in API and MCP",
       "Up to 5 repositories, unlimited MCP projects",
-      "Docs, tests and bug hunter on both sides",
-      "Watchers on merge: new endpoints documented and tested by morning",
+      "UI automation (Playwright) included",
+      "SSO and team roles",
       "~200 watched merges a month",
-      "Bring your own Claude key: $299/mo, unlimited usage",
+      "Priority support",
     ],
     cta: "Start with Pro",
     highlighted: true,
@@ -159,14 +170,14 @@ const pricingTiers = [
   {
     name: "Enterprise",
     price: 1500,
+    byok: 899,
     tagline: "For organizations that need scale, control and their own data.",
     features: [
-      "Unlimited repositories and MCP projects",
+      "Everything in Pro",
+      "Unlimited repositories",
       "~700 watched merges a month",
-      "Team workspaces, roles and SSO",
       "Your own database, or your own region",
-      "Bring your own Claude key: $899/mo, unlimited usage",
-      "Dedicated onboarding, SLA and support",
+      "Dedicated onboarding and SLA",
     ],
     cta: "Talk to us",
     highlighted: false,
@@ -629,9 +640,10 @@ export default function Home() {
                 Simple plans for documentation and QA at any scale.
               </h2>
               <p className="mt-3 text-sm leading-6 text-white/55">
-                Start on one repository, scale to a whole organization. Every plan
-                includes docs, tests and bug reports — the difference is how much of
-                it Olivia does for you, and whether it keeps watching after each merge.
+                Take just the half you need — the API side or the MCP side — or both.
+                Every plan includes docs, tests, the bug hunter and the watcher that
+                keeps them current after each merge. Bring your own Claude key and any
+                plan is 40% off with no usage cap.
               </p>
             </div>
 
@@ -658,6 +670,9 @@ export default function Home() {
                     </span>
                     <span className="text-sm text-white/45">/month</span>
                   </div>
+                  <p className="mt-1 text-xs text-cyan-200/80">
+                    ${tier.byok}/month with your own Claude key — no usage cap
+                  </p>
                   <p className="mt-3 text-sm leading-6 text-white/55">{tier.tagline}</p>
                   <ul className="mt-5 flex-1 space-y-2">
                     {tier.features.map((feature) => (
@@ -682,6 +697,20 @@ export default function Home() {
                 </article>
               ))}
             </div>
+
+            {/* Free isn't a card: it's a trial, and giving it a column next to
+                the paid plans makes it look like a choice rather than a start. */}
+            <p className="mt-6 text-sm text-white/60">
+              Just want to see it work?{" "}
+              <Link
+                to="/register"
+                className="font-medium text-cyan-200 underline-offset-4 hover:underline"
+              >
+                Start free
+              </Link>{" "}
+              with one repository and one MCP project — docs, tests and a few bug
+              hunter runs a month, no card needed.
+            </p>
 
             {/* The honest footnote: a plan's included work is a budget, and a
                 merge that rewrites twenty files spends more of it than one that

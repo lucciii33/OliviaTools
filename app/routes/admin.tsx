@@ -22,7 +22,7 @@ import { cn } from "~/lib/utils"
 // admin key, and it shouldn't look like part of the product.
 
 // "test" is MCP-only — the API side is refused for it (see usageLimitService).
-const PLANS = ["free", "test", "pro", "enterprise"] as const
+const PLANS = ["free", "test", "mcp", "api", "pro", "enterprise"] as const
 
 function usd(n: number) {
   return `$${(n || 0).toFixed(2)}`

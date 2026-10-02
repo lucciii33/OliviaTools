@@ -8,7 +8,7 @@
 export interface AdminCompany {
   _id: string
   name: string
-  plan: "free" | "test" | "pro" | "enterprise"
+  plan: "free" | "test" | "mcp" | "api" | "pro" | "enterprise"
   // What the plan includes: api, mcp, automation, watchers.
   features: string[]
   // The workspace pays for its own Claude usage...
