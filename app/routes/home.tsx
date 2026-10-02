@@ -200,15 +200,15 @@ export default function Home() {
           </Link>
 
           <div className="flex items-center gap-2">
-            {/* <a
+            <a
               href="#pricing"
               className={cn(
                 buttonVariants({ variant: "ghost", size: "sm" }),
-                "hidden text-white/70 hover:bg-white/10 hover:text-white sm:inline-flex"
+                "hidden text-white/70 hover:bg-white/10 hover:text-white sm:inline-flex",
               )}
             >
               Pricing
-            </a> */}
+            </a>
             <Link
               to="/claude-skills"
               className={cn(
@@ -614,7 +614,12 @@ export default function Home() {
           </div>
         </section>
 
-        <section id="pricing" className="border-y border-white/10 bg-white/[0.02] px-5 py-12 md:px-8 md:py-16">
+        {/* scroll-mt clears the sticky header, so the heading isn't hidden
+            under it when the Pricing link jumps here. */}
+        <section
+          id="pricing"
+          className="scroll-mt-24 border-y border-white/10 bg-white/[0.02] px-5 py-12 md:px-8 md:py-16"
+        >
           <div className="mx-auto max-w-7xl">
             <div className="mb-8 max-w-3xl">
               <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200/70">
