@@ -76,6 +76,17 @@ export default function WatchersPage() {
   useEffect(() => {
     getInstallations();
     refresh();
+    // The repo list was read once, on mount. Connect a repo in another tab (or
+    // reconnect GitHub, which issues a NEW installation) and this page kept
+    // offering the old list until a hard reload — so re-read it whenever the
+    // tab comes back to the front.
+    const onFocus = () => getInstallations();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

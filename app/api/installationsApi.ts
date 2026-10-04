@@ -30,7 +30,11 @@ export function useInstallationsApi() {
     setLoading(true)
     setError(null)
     try {
+      // no-store: the browser was serving a cached copy of this list, so a
+      // repo connected (or a GitHub reconnect that issues a new installation)
+      // didn't show up until a hard reload.
       const res = await fetch(`${BASE_URL}/api/installations`, {
+        cache: "no-store",
         headers: { Authorization: `Bearer ${getAuthToken()}` },
       })
       if (!res.ok) throw new Error("Request failed")
