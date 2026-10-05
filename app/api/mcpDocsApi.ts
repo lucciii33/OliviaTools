@@ -840,6 +840,15 @@ export async function runMcpToolSuite(suiteId: string) {
   return readJson<McpSuiteRunResult>(res)
 }
 
+/** Run ONE test instead of the whole suite. */
+export async function runMcpToolSuiteCase(suiteId: string, caseId: string) {
+  const res = await apiFetch(
+    `/api/mcp-lab/tool-suites/${encodeURIComponent(suiteId)}/cases/${encodeURIComponent(caseId)}/run`,
+    { method: "POST" }
+  )
+  return readJson<McpSuiteRunResult>(res)
+}
+
 /** Change what one test covers, from a plain-language instruction. */
 export async function refineMcpToolSuiteCase(
   suiteId: string,

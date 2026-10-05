@@ -64,6 +64,10 @@ export interface E2eCommit {
   sha: string
   url: string
   committedAt: string
+  // The pull request the test arrived in — tests land on their own branch and
+  // get reviewed, never straight on the branch you ship from.
+  prNumber?: number
+  prUrl?: string
 }
 
 export interface CommitTestResult {

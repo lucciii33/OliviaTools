@@ -90,6 +90,21 @@ export default function WatchersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Two watchers on the same repo but different branches both regenerate the
+  // SAME docs today — whichever merges last wins. Per-branch docs is the real
+  // fix; until then the page says so instead of letting it surprise someone.
+  const branchConflicts = useMemo(() => {
+    const byRepo = new Map<string, Set<string>>();
+    for (const w of watchers) {
+      const key = `${w.owner}/${w.repo}`;
+      if (!byRepo.has(key)) byRepo.set(key, new Set());
+      byRepo.get(key)!.add(w.branch);
+    }
+    return [...byRepo.entries()]
+      .filter(([, branches]) => branches.size > 1)
+      .map(([repo, branches]) => `${repo} (${[...branches].join(", ")})`);
+  }, [watchers]);
+
   // A repo already watched on that branch shouldn't be offered again.
   const available = useMemo(() => {
     const taken = new Set(watchers.map((w) => `${w.owner}/${w.repo}`));
@@ -296,6 +311,16 @@ export default function WatchersPage() {
               Watch
             </Button>
           </div>
+          <p className="mt-2 text-[11px] text-white/30">
+            Docs are regenerated from the branch you name here.
+          </p>
+          {branchConflicts.length > 0 && (
+            <p className="mt-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-300">
+              Watching two branches of the same repo: {branchConflicts.join("; ")}.
+              They share one set of docs, so the last merge wins. Per-branch docs
+              are coming.
+            </p>
+          )}
         </div>
 
         {/* Watchers */}

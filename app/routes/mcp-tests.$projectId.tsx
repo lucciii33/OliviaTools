@@ -19,6 +19,7 @@ import {
   listMcpToolSuites,
   runMcpToolSuite,
   refineMcpToolSuiteCase,
+  runMcpToolSuiteCase,
   createMcpToolSuiteCase,
   deleteMcpToolSuiteCase,
   generateMcpProjectSuites,
@@ -110,6 +111,30 @@ export default function McpTestsPage() {
       setError(err instanceof Error ? err.message : "Run failed")
     } finally {
       setRunningId(null)
+    }
+  }
+
+  // Run ONE test. Its result is merged into what's on screen so the other
+  // tests keep their verdicts.
+  async function handleRunCase(suiteId: string, caseId: string) {
+    try {
+      const result = await runMcpToolSuiteCase(suiteId, caseId)
+      setRuns((prev) => {
+        const previous = prev[suiteId]
+        const others = (previous?.results || []).filter(
+          (r) => !result.results.some((x) => x.caseId === r.caseId),
+        )
+        return {
+          ...prev,
+          [suiteId]: {
+            ...(previous || result),
+            summary: previous ? previous.summary : result.summary,
+            results: [...others, ...result.results],
+          },
+        }
+      })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Run failed")
     }
   }
 
@@ -248,6 +273,7 @@ export default function McpTestsPage() {
                   runs={runs}
                   runningId={runningId}
                   onRun={handleRun}
+                  onRunCase={handleRunCase}
                   onRefined={refresh}
                 />
               ))}
@@ -265,6 +291,7 @@ function ToolCard({
   runs,
   runningId,
   onRun,
+  onRunCase,
   onRefined,
 }: {
   toolName: string
@@ -272,6 +299,7 @@ function ToolCard({
   runs: Record<string, McpSuiteRunResult>
   runningId: string | null
   onRun: (suiteId: string) => void
+  onRunCase: (suiteId: string, caseId: string) => Promise<void>
   onRefined: () => void
 }) {
   const [open, setOpen] = useState(false)
@@ -321,6 +349,7 @@ function ToolCard({
               run={runs[suite._id]}
               running={runningId === suite._id}
               onRun={() => onRun(suite._id)}
+              onRunCase={onRunCase}
               onRefined={onRefined}
             />
           ))}
@@ -335,12 +364,14 @@ function SuiteBlock({
   run,
   running,
   onRun,
+  onRunCase,
   onRefined,
 }: {
   suite: McpToolSuite
   run?: McpSuiteRunResult
   running: boolean
   onRun: () => void
+  onRunCase: (suiteId: string, caseId: string) => Promise<void>
   onRefined: () => void
 }) {
   const last = suite.lastRun
@@ -417,6 +448,7 @@ function SuiteBlock({
             testCase={c}
             result={byCase.get(c._id)}
             onRefined={onRefined}
+            onRun={() => onRunCase(suite._id, c._id)}
             onDelete={async () => {
               try {
                 await deleteMcpToolSuiteCase(suite._id, c._id)
@@ -448,15 +480,18 @@ function CaseRow({
   testCase: c,
   result,
   onRefined,
+  onRun,
   onDelete,
 }: {
   suiteId: string
   testCase: McpToolTestCase
   result?: McpSuiteCaseResult
   onRefined: () => void
+  onRun: () => Promise<void>
   onDelete: () => Promise<void>
 }) {
   const [editing, setEditing] = useState(false)
+  const [runningCase, setRunningCase] = useState(false)
   const [instruction, setInstruction] = useState("")
   const [saving, setSaving] = useState(false)
 
@@ -507,11 +542,32 @@ function CaseRow({
                 regression
               </span>
             )}
+            {/* Run just this test — invoking one tool beats invoking them all. */}
+            <button
+              type="button"
+              title="Run only this test"
+              disabled={runningCase}
+              onClick={async () => {
+                setRunningCase(true)
+                try {
+                  await onRun()
+                } finally {
+                  setRunningCase(false)
+                }
+              }}
+              className="ml-auto text-white/25 hover:text-emerald-300 disabled:opacity-40"
+            >
+              {runningCase ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Play className="h-3 w-3" />
+              )}
+            </button>
             <button
               type="button"
               title="Delete this test"
               onClick={onDelete}
-              className="ml-auto text-white/20 hover:text-red-400"
+              className="text-white/20 hover:text-red-400"
             >
               <Trash2 className="h-3 w-3" />
             </button>
