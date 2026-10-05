@@ -593,9 +593,13 @@ export function useQaApi() {
     owner?: string
     repo?: string
     projectId?: string
+    branch?: string
   }): Promise<ScopedBug[]> => {
     setError(null)
-    const res = await apiFetch(`${scopePath(scope)}/bugs`, { cache: "no-store" })
+    const qs = scope.branch ? `?branch=${encodeURIComponent(scope.branch)}` : ""
+    const res = await apiFetch(`${scopePath(scope)}/bugs${qs}`, {
+      cache: "no-store",
+    })
     if (!res.ok) {
       setError(`Failed to load bugs (${res.status})`)
       return []
@@ -607,10 +611,14 @@ export function useQaApi() {
     owner?: string
     repo?: string
     projectId?: string
+    branch?: string
   }): Promise<ScopedQaRun[]> => {
     setError(null)
     const path = scope.projectId ? "qa-runs" : "runs"
-    const res = await apiFetch(`${scopePath(scope)}/${path}`, { cache: "no-store" })
+    const qs = scope.branch ? `?branch=${encodeURIComponent(scope.branch)}` : ""
+    const res = await apiFetch(`${scopePath(scope)}/${path}${qs}`, {
+      cache: "no-store",
+    })
     if (!res.ok) {
       setError(`Failed to load runs (${res.status})`)
       return []
@@ -743,10 +751,13 @@ export function useQaApi() {
   // owner/repo instead of a projectId.
   const listRepoSuites = async (
     owner: string,
-    repo: string
+    repo: string,
+    // Environment: one repo can hold Production and Development tests.
+    branch?: string
   ): Promise<ApiSuite[]> => {
     setError(null)
-    const res = await apiFetch(`/api/qa/repos/${owner}/${repo}/suites`)
+    const qs = branch ? `?branch=${encodeURIComponent(branch)}` : ""
+    const res = await apiFetch(`/api/qa/repos/${owner}/${repo}/suites${qs}`)
     if (!res.ok) {
       setError(`Failed to load tests (${res.status})`)
       return []
@@ -787,6 +798,31 @@ export function useQaApi() {
     setError(null)
     try {
       const res = await apiFetch(`/api/qa/suites/${suiteId}/run`, {
+        method: "POST",
+        body: JSON.stringify(authSchemeName ? { authSchemeName } : {}),
+      })
+      if (!res.ok) {
+        const body = await res.text()
+        setError(safeMessage(body) || `Run failed (${res.status})`)
+        return null
+      }
+      return (await res.json()) as SuiteRunResult
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Run failed")
+      return null
+    }
+  }
+
+  // Run ONE test instead of the suite — for checking a test you just edited
+  // without paying for, or waiting on, all of them.
+  const runSuiteCase = async (
+    suiteId: string,
+    caseId: string,
+    authSchemeName?: string
+  ): Promise<SuiteRunResult | null> => {
+    setError(null)
+    try {
+      const res = await apiFetch(`/api/qa/suites/${suiteId}/cases/${caseId}/run`, {
         method: "POST",
         body: JSON.stringify(authSchemeName ? { authSchemeName } : {}),
       })
@@ -934,6 +970,7 @@ export function useQaApi() {
     generateRepoSectionSuites,
     runSuite,
     refineSuiteCase,
+    runSuiteCase,
     createSuiteCase,
     deleteSuiteCase,
     deleteSuite,

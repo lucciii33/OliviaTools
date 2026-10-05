@@ -21,6 +21,7 @@ import { QaConfigDialog } from "~/components/QaConfigDialog"
 import { ProjectAuthDialog } from "~/components/ProjectAuthDialog"
 import { EndpointVariables } from "~/components/EndpointVariables"
 import { AuthSchemePicker } from "~/components/AuthSchemePicker"
+import { EnvironmentTabs } from "~/components/EnvironmentTabs"
 import { ResponseShapePanel } from "~/components/ResponseShapePanel"
 import { AddTestCase } from "~/components/AddTestCase"
 import {
@@ -51,6 +52,7 @@ export default function ApiTestsPage() {
     listRepoSuites,
     runSuite,
     refineSuiteCase,
+    runSuiteCase,
     createSuiteCase,
     deleteSuiteCase,
     generateSectionSuites,
@@ -73,10 +75,15 @@ export default function ApiTestsPage() {
   // single auth method, which is how a per-method hole becomes visible.
   const [authScheme, setAuthScheme] = useState("")
 
-  async function refresh() {
+  // Environment: a repo's tests belong to one branch — Production or
+  // Development — and showing both at once lists every endpoint twice with no
+  // way to tell which is which.
+  const [branch, setBranch] = useState("")
+
+  async function refresh(forBranch = branch) {
     setLoading(true)
     const data = isRepo
-      ? await listRepoSuites(owner!, repo!)
+      ? await listRepoSuites(owner!, repo!, forBranch || undefined)
       : projectId
         ? await listSuites(projectId)
         : []
@@ -88,7 +95,7 @@ export default function ApiTestsPage() {
   useEffect(() => {
     refresh()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, owner, repo])
+  }, [projectId, owner, repo, branch])
 
   // ProjectAuthDialog takes the whole project, so fetch it for that scope only.
   useEffect(() => {
@@ -239,6 +246,15 @@ export default function ApiTestsPage() {
               </div>
             )}
 
+            {isRepo && owner && repo && (
+              <EnvironmentTabs
+                owner={owner}
+                repo={repo}
+                value={branch}
+                onChange={setBranch}
+              />
+            )}
+
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs text-white/40 uppercase tracking-wider">
                 {activeSection} · {endpoints.length} endpoint
@@ -287,6 +303,27 @@ export default function ApiTestsPage() {
                   runs={runs}
                   runningId={runningId}
                   onRun={handleRun}
+                  onRunCase={async (suiteId, caseId) => {
+                    const result = await runSuiteCase(suiteId, caseId, authScheme)
+                    if (!result) return
+                    // Merge the single result into what's already shown, so the
+                    // other tests keep their verdicts instead of disappearing.
+                    setRuns((prev) => {
+                      const previous = prev[suiteId]
+                      const others = (previous?.results || []).filter(
+                        (r) => !result.results.some((x) => x.caseId === r.caseId),
+                      )
+                      const results = [...others, ...result.results]
+                      return {
+                        ...prev,
+                        [suiteId]: {
+                          ...(previous || result),
+                          summary: previous ? previous.summary : result.summary,
+                          results,
+                        },
+                      }
+                    })
+                  }}
                   onRefine={refineSuiteCase}
                   onRefined={refresh}
                   onCreateCase={async (suiteId, instruction) =>
@@ -329,6 +366,7 @@ function EndpointCard({
   onRefined,
   onCreateCase,
   onDeleteCase,
+  onRunCase,
 }: {
   endpointKey: string
   suites: ApiSuite[]
@@ -343,6 +381,7 @@ function EndpointCard({
   onRefined: () => void
   onCreateCase: (suiteId: string, instruction: string) => Promise<boolean>
   onDeleteCase: (suiteId: string, caseId: string) => Promise<boolean>
+  onRunCase: (suiteId: string, caseId: string) => Promise<void>
 }) {
   const [open, setOpen] = useState(false)
   // Read the endpoint off the suites themselves rather than re-parsing the
@@ -399,6 +438,7 @@ function EndpointCard({
               onRefined={onRefined}
               onCreateCase={onCreateCase}
               onDeleteCase={onDeleteCase}
+              onRunCase={onRunCase}
             />
           ))}
         </div>
@@ -416,6 +456,7 @@ function SuiteBlock({
   onRefined,
   onCreateCase,
   onDeleteCase,
+  onRunCase,
 }: {
   suite: ApiSuite
   run?: SuiteRunResult
@@ -429,6 +470,7 @@ function SuiteBlock({
   onRefined: () => void
   onCreateCase: (suiteId: string, instruction: string) => Promise<boolean>
   onDeleteCase: (suiteId: string, caseId: string) => Promise<boolean>
+  onRunCase: (suiteId: string, caseId: string) => Promise<void>
 }) {
   const last = suite.lastRun
   const byCase = useMemo(() => {
@@ -503,6 +545,7 @@ function SuiteBlock({
             result={byCase.get(c._id)}
             onRefine={onRefine}
             onRefined={onRefined}
+            onRun={() => onRunCase(suite._id, c._id)}
             onDelete={async () => {
               if (await onDeleteCase(suite._id, c._id)) onRefined()
             }}
@@ -526,6 +569,7 @@ function CaseRow({
   result,
   onRefine,
   onRefined,
+  onRun,
   onDelete,
 }: {
   suiteId: string
@@ -537,9 +581,11 @@ function CaseRow({
     instruction: string
   ) => Promise<ApiTestCase | null>
   onRefined: () => void
+  onRun: () => Promise<void>
   onDelete: () => Promise<void>
 }) {
   const [editing, setEditing] = useState(false)
+  const [running, setRunning] = useState(false)
   const [instruction, setInstruction] = useState("")
   const [saving, setSaving] = useState(false)
 
@@ -580,11 +626,33 @@ function CaseRow({
                 regression
               </span>
             )}
+            {/* Run just this test: after editing one, re-running the whole
+                suite costs time and money for an answer about one case. */}
+            <button
+              type="button"
+              title="Run only this test"
+              disabled={running}
+              onClick={async () => {
+                setRunning(true)
+                try {
+                  await onRun()
+                } finally {
+                  setRunning(false)
+                }
+              }}
+              className="ml-auto text-white/25 hover:text-emerald-300 disabled:opacity-40"
+            >
+              {running ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Play className="h-3 w-3" />
+              )}
+            </button>
             <button
               type="button"
               title="Delete this test"
               onClick={onDelete}
-              className="ml-auto text-white/20 hover:text-red-400"
+              className="text-white/20 hover:text-red-400"
             >
               <Trash2 className="h-3 w-3" />
             </button>

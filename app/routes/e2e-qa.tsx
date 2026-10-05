@@ -919,6 +919,17 @@ export default function E2eQa() {
                             </>
                           )}
                         </Button>
+                        {t.commit?.prUrl && (
+                          <a
+                            href={t.commit.prUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[11px] text-cyan-300 hover:underline"
+                            title={`Open pull request #${t.commit.prNumber}`}
+                          >
+                            PR #{t.commit.prNumber}
+                          </a>
+                        )}
                         {t.commit?.url && (
                           <a
                             href={t.commit.url}

@@ -23,6 +23,8 @@ export interface StartBackfillPayload {
   repo: string
   // Re-document every file, not only the ones that changed since last time.
   force?: boolean
+  // The environment to document: a branch name, or empty for the repo's default.
+  branch?: string
 }
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? ""
@@ -34,6 +36,19 @@ function authHeaders(): HeadersInit {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   }
+}
+
+/** The repo's branches, so an environment is picked and never typed. */
+export async function getRepoBranches(
+  owner: string,
+  repo: string
+): Promise<{ branches: string[]; defaultBranch: string }> {
+  const res = await fetch(
+    `${BASE_URL}/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches`,
+    { cache: "no-store", headers: authHeaders() }
+  )
+  if (!res.ok) return { branches: [], defaultBranch: "" }
+  return (await res.json()) as { branches: string[]; defaultBranch: string }
 }
 
 export async function startBackfill(

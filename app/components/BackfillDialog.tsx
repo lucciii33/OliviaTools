@@ -15,6 +15,7 @@ import {
 } from "~/components/ui/dialog"
 import { Button } from "~/components/ui/button"
 import { useInstallationsApi } from "~/api/installationsApi"
+import { getRepoBranches } from "~/api/backfillApi"
 import { Input } from "~/components/ui/input"
 import { Badge } from "~/components/ui/badge"
 import {
@@ -27,8 +28,8 @@ import {
 interface BackfillDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onCompleted?: (payload: { owner: string; repo: string }) => void
-  defaults?: { owner?: string; repo?: string }
+  onCompleted?: (payload: { owner: string; repo: string; branch?: string }) => void
+  defaults?: { owner?: string; repo?: string; branch?: string }
   lockRepo?: boolean
 }
 
@@ -49,13 +50,34 @@ export function BackfillDialog({
   // how a stale "admin" got submitted and came back as a GitHub 404.
   const { installations, getInstallations } = useInstallationsApi()
   const { status, error, starting, start, reset } = useBackfillJob()
-  const submittedRef = useRef<{ owner: string; repo: string } | null>(null)
+  const submittedRef = useRef<{
+    owner: string
+    repo: string
+    branch?: string
+  } | null>(null)
   const notifiedRef = useRef(false)
 
   useEffect(() => {
     if (open) void getInstallations()
+    // Re-sync with the page every time it opens: the environment tab may have
+    // changed since the last time this dialog was used.
+    if (open && defaults?.branch !== undefined) setBranch(defaults.branch)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
+  }, [open, defaults?.branch])
+
+  // Read the branches whenever the chosen repo changes.
+  useEffect(() => {
+    if (!open || !owner || !repo) return
+    let cancelled = false
+    void getRepoBranches(owner, repo).then((res) => {
+      if (cancelled) return
+      setBranches(res.branches)
+      setDefaultBranch(res.defaultBranch)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [open, owner, repo])
 
   // A repo that isn't connected any more must not survive in the form.
   useEffect(() => {
@@ -107,6 +129,13 @@ export function BackfillDialog({
   // Off by default: only files that changed are re-documented. On re-reads
   // every file — for when the docs look wrong even though the code didn't move.
   const [force, setForce] = useState(false)
+  // Which environment is being documented. Empty = the repo's default branch
+  // (main or master), which the backend resolves and stores by name.
+  const [branch, setBranch] = useState(defaults?.branch ?? "")
+  // Branch names are not guessable (dev, develop, development, staging), so the
+  // real ones come from GitHub and the customer picks.
+  const [branches, setBranches] = useState<string[]>([])
+  const [defaultBranch, setDefaultBranch] = useState("")
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -118,9 +147,13 @@ export function BackfillDialog({
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
     } catch {}
-    submittedRef.current = { owner: payload.owner, repo: payload.repo }
+    submittedRef.current = {
+      owner: payload.owner,
+      repo: payload.repo,
+      branch: branch.trim(),
+    }
     notifiedRef.current = false
-    await start({ ...payload, force })
+    await start({ ...payload, force, branch: branch.trim() })
   }
 
   return (
@@ -198,6 +231,38 @@ export function BackfillDialog({
                 </div>
               </>
             )}
+            {/* Environment. A team merges into its development branch first, so
+                "the API" is two things: what ships, and what is about to. Each
+                gets its own docs, and the tabs on the docs page switch between
+                them. The branch is PICKED, not typed — dev, develop and
+                development are all real names and nobody should have to guess. */}
+            <div className="space-y-1">
+              <label className="text-xs text-white/60">Environment (branch)</label>
+              <select
+                value={branch}
+                onChange={(e) => setBranch(e.target.value)}
+                disabled={starting || !branches.length}
+                className="w-full rounded-md bg-white/5 border border-white/15 px-3 py-2 text-sm text-white focus:outline-none focus:border-white/30"
+              >
+                <option value="" className="bg-[#0d0d14]">
+                  {defaultBranch
+                    ? `${defaultBranch} — what ships today`
+                    : "default branch"}
+                </option>
+                {branches
+                  .filter((b) => b !== defaultBranch)
+                  .map((b) => (
+                    <option key={b} value={b} className="bg-[#0d0d14]">
+                      {b}
+                    </option>
+                  ))}
+              </select>
+              <p className="text-[11px] text-white/35">
+                A repo can have two environments: the one that ships, and the branch
+                you develop on.
+              </p>
+            </div>
+
             <label className="flex items-start gap-2 text-xs text-white/60 cursor-pointer">
               <input
                 type="checkbox"

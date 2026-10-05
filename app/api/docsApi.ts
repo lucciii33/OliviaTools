@@ -14,8 +14,18 @@ export interface DocResponse {
   example: unknown
 }
 
+// An environment is a branch of a repo with its own docs: `main` is what ships,
+// `dev` is what is about to. The tabs on the docs page are these.
+export interface DocEnvironment {
+  branch: string
+  endpoints: number
+  updatedAt?: string
+}
+
 export interface Doc {
   _id: string
+  // The environment (branch) this doc describes.
+  branch?: string
   method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH"
   path: string
   section?: string
@@ -50,13 +60,16 @@ export function useDocsApi() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const getDocs = async (repo?: string) => {
+  const getDocs = async (repo?: string, branch?: string) => {
     setLoading(true)
     setError(null)
     try {
-      const params = repo
-        ? `?repo=${encodeURIComponent(repo)}&_=${Date.now()}`
-        : `?_=${Date.now()}`
+      const q = new URLSearchParams({ _: String(Date.now()) })
+      if (repo) q.set("repo", repo)
+      // Without a branch the API returns every environment's endpoints mixed
+      // together, which is never what a page wants.
+      if (branch) q.set("branch", branch)
+      const params = `?${q.toString()}`
       const res = await fetch(`${BASE_URL}/api/docs${params}`, {
         cache: "no-store",
         headers: { Authorization: `Bearer ${getAuthToken()}` },
@@ -79,5 +92,23 @@ export function useDocsApi() {
     setDocs((prev) => prev.filter((d) => d._id !== id))
   }
 
-  return { docs, loading, error, getDocs, deleteDoc }
+  /** The environments this repo has docs for, for the tabs. */
+  const getDocEnvironments = async (
+    owner: string,
+    repo: string
+  ): Promise<DocEnvironment[]> => {
+    try {
+      const q = new URLSearchParams({ owner, repo })
+      const res = await fetch(`${BASE_URL}/api/docs/environments?${q.toString()}`, {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${getAuthToken()}` },
+      })
+      if (!res.ok) return []
+      return (await res.json()) as DocEnvironment[]
+    } catch {
+      return []
+    }
+  }
+
+  return { docs, loading, error, getDocs, getDocEnvironments, deleteDoc }
 }

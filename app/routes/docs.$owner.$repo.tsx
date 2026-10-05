@@ -13,9 +13,11 @@ import { Button } from "~/components/ui/button"
 import { Sidebar } from "~/components/Sidebar"
 import { DocCard } from "~/components/DocCard"
 import { BackfillDialog } from "~/components/BackfillDialog"
+import { getRepoBranches } from "~/api/backfillApi"
 import { WatcherRunningBanner } from "~/components/WatcherRunningBanner"
 import { useAuth } from "~/context/AuthContext"
-import { useDocsApi } from "~/api/docsApi"
+import { useDocsApi, type DocEnvironment } from "~/api/docsApi"
+import { cn } from "~/lib/utils"
 import { addKnownRepo } from "~/lib/knownRepos"
 
 export default function DocsRepo() {
@@ -24,8 +26,31 @@ export default function DocsRepo() {
   const params = useParams<{ owner: string; repo: string }>()
   const owner = params.owner ?? ""
   const repo = params.repo ?? ""
-  const { docs, loading, error, getDocs, deleteDoc } = useDocsApi()
+  const { docs, loading, error, getDocs, getDocEnvironments, deleteDoc } =
+    useDocsApi()
   const [backfillOpen, setBackfillOpen] = useState(false)
+  // Environments: one repo, several branches, each with its own docs. `main` is
+  // what ships; `dev` is what is about to. They must never be shown mixed.
+  const [environments, setEnvironments] = useState<DocEnvironment[]>([])
+  const [branch, setBranch] = useState<string>("")
+  // Which branch the repo ships from. The tabs say "Production" and
+  // "Development" rather than just a branch name, because "master vs dev" is
+  // obvious to the person who set it up and to nobody else.
+  const [defaultBranch, setDefaultBranch] = useState("")
+
+  async function loadEnvironments(preferred?: string) {
+    const envs = await getDocEnvironments(owner, repo)
+    setEnvironments(envs)
+    const wanted =
+      (preferred && envs.some((e) => e.branch === preferred) && preferred) ||
+      (branch && envs.some((e) => e.branch === branch) && branch) ||
+      // Default to what ships, not to whatever was generated last.
+      envs.find((e) => e.branch === "main" || e.branch === "master")?.branch ||
+      envs[0]?.branch ||
+      ""
+    setBranch(wanted)
+    return wanted
+  }
 
   useEffect(() => {
     if (!user) {
@@ -34,16 +59,20 @@ export default function DocsRepo() {
     }
     if (!repo) return
     addKnownRepo({ owner, repo })
-    getDocs(repo)
+    void getRepoBranches(owner, repo).then((r) => setDefaultBranch(r.defaultBranch))
+    void loadEnvironments().then((b) => getDocs(repo, b || undefined))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, owner, repo])
 
   const repoDocs = useMemo(
     () =>
       docs.filter(
-        (d) => d.repo === repo && (!d.owner || d.owner === owner)
+        (d) =>
+          d.repo === repo &&
+          (!d.owner || d.owner === owner) &&
+          (!branch || !d.branch || d.branch === branch)
       ),
-    [docs, owner, repo]
+    [docs, owner, repo, branch]
   )
 
   if (!user) return null
@@ -123,7 +152,11 @@ export default function DocsRepo() {
               variant="ghost"
               size="icon"
               className="text-white/40 hover:text-white hover:bg-white/10"
-              onClick={() => getDocs(repo)}
+              onClick={() => {
+                void loadEnvironments(branch).then((b) =>
+                  getDocs(repo, b || undefined),
+                )
+              }}
               disabled={loading}
             >
               <RefreshCw
@@ -133,12 +166,61 @@ export default function DocsRepo() {
           </div>
         </div>
 
+        {/* Environment tabs: the same repo, documented per branch. */}
+        {environments.length > 0 && (
+          <div className="mb-4 flex flex-wrap items-center gap-1.5">
+            {environments.map((e) => {
+              const isProduction = !e.branch || e.branch === defaultBranch;
+              const active = e.branch === branch;
+              return (
+                <button
+                  key={e.branch || "default"}
+                  type="button"
+                  onClick={() => {
+                    setBranch(e.branch)
+                    getDocs(repo, e.branch || undefined)
+                  }}
+                  className={cn(
+                    "rounded-md border px-3 py-1.5 text-left",
+                    active
+                      ? "border-white/25 bg-white/[0.08]"
+                      : "border-white/10 bg-white/[0.02] hover:bg-white/[0.05]",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "flex items-center gap-1.5 text-xs font-medium",
+                      active ? "text-white" : "text-white/60",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "h-1.5 w-1.5 rounded-full",
+                        isProduction ? "bg-emerald-400" : "bg-amber-400",
+                      )}
+                    />
+                    {isProduction ? "Production" : "Development"}
+                  </span>
+                  <span className="mt-0.5 block font-mono text-[11px] text-white/35">
+                    {e.branch || "default"} · {e.endpoints} endpoint
+                    {e.endpoints === 1 ? "" : "s"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {owner && repo && (
           <WatcherRunningBanner
             kind="api"
             owner={owner}
             repo={repo}
-            onFinished={() => getDocs(repo)}
+            onFinished={() => {
+              void loadEnvironments(branch).then((b) =>
+                getDocs(repo, b || undefined),
+              )
+            }}
           />
         )}
 
@@ -186,7 +268,10 @@ export default function DocsRepo() {
       <BackfillDialog
         open={backfillOpen}
         onOpenChange={setBackfillOpen}
-        defaults={{ owner, repo }}
+        // Opens on the environment you're looking at. Defaulting to the repo's
+        // main branch while the Development tab is on screen is how someone
+        // regenerates production by accident.
+        defaults={{ owner, repo, branch }}
         lockRepo
         onCompleted={(payload) => {
           setBackfillOpen(false)
@@ -194,7 +279,10 @@ export default function DocsRepo() {
           if (payload.owner !== owner || payload.repo !== repo) {
             navigate(`/docs/${payload.owner}/${payload.repo}`)
           } else {
-            getDocs(repo)
+            // Land on whatever environment was generated, with fresh counts.
+            void loadEnvironments(payload.branch ?? branch).then((b) =>
+              getDocs(repo, b || undefined),
+            )
           }
         }}
       />

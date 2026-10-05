@@ -15,6 +15,7 @@ import { MethodBadge } from "~/components/MethodBadge"
 import { useAuth } from "~/context/AuthContext"
 import { useQaApi, type BugStatus, type ScopedBug, type ScopedQaRun } from "~/api/qaApi"
 import { cn } from "~/lib/utils"
+import { EnvironmentTabs } from "~/components/EnvironmentTabs"
 
 // Where an API repo's bug hunter output lives: every bug it found and every run
 // it made, for the whole repo. The MCP side has had these two pages since the
@@ -53,10 +54,16 @@ export default function ApiQaPage() {
   const [runs, setRuns] = useState<ScopedQaRun[]>([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<BugStatus | "all">("open")
+  // Environment: bugs and runs belong to the branch their endpoint belongs to.
+  const [branch, setBranch] = useState("")
 
   async function refresh() {
     setLoading(true)
-    const [b, r] = await Promise.all([listScopeBugs(scope), listScopeQaRuns(scope)])
+    const scoped = { ...scope, branch: branch || undefined }
+    const [b, r] = await Promise.all([
+      listScopeBugs(scoped),
+      listScopeQaRuns(scoped),
+    ])
     setBugs(b)
     setRuns(r)
     setLoading(false)
@@ -69,7 +76,7 @@ export default function ApiQaPage() {
     }
     void refresh()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, owner, repo, projectId])
+  }, [user, owner, repo, projectId, branch])
 
   const shownBugs = useMemo(
     () =>
@@ -119,6 +126,15 @@ export default function ApiQaPage() {
           <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
             {error}
           </div>
+        )}
+
+        {isRepo && owner && repo && (
+          <EnvironmentTabs
+            owner={owner}
+            repo={repo}
+            value={branch}
+            onChange={setBranch}
+          />
         )}
 
         <div className="flex items-center gap-2 mb-4">
