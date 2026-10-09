@@ -11,6 +11,7 @@ import {
 import type { Route } from "./+types/root"
 import { AuthProvider } from "~/context/AuthContext"
 import { LimitReachedDialog } from "~/components/LimitReachedDialog"
+import { RunningJobs } from "~/components/RunningJobs"
 import "./app.css"
 
 export function loader({ request }: Route.LoaderArgs) {
@@ -48,6 +49,8 @@ export default function App() {
       <Outlet />
       {/* One place to explain a limit, for every button in the product. */}
       <LimitReachedDialog />
+      {/* And one place that shows what is running in the background. */}
+      <RunningJobs />
     </AuthProvider>
   )
 }

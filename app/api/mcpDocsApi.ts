@@ -1,4 +1,5 @@
 import { apiFetch } from "~/utils/api"
+import { runAsJob } from "~/api/jobsApi"
 
 export type McpTransport = "http" | "sse" | "stdio"
 
@@ -415,7 +416,10 @@ export async function runMcpQa(payload: McpQaRunPayload) {
     method: "POST",
     body: JSON.stringify(payload),
   })
-  return readJson<McpQaRunResponse>(res)
+  // The server answers with a job id now (so several runs can go at once) and
+  // the work finishes in the background. Waiting here keeps the callers — and
+  // their result shape — exactly as they were.
+  return runAsJob<McpQaRunResponse>(res)
 }
 
 export async function listMcpQaRuns() {
@@ -837,7 +841,7 @@ export async function runMcpToolSuite(suiteId: string) {
     `/api/mcp-lab/tool-suites/${encodeURIComponent(suiteId)}/run`,
     { method: "POST" }
   )
-  return readJson<McpSuiteRunResult>(res)
+  return runAsJob<McpSuiteRunResult>(res)
 }
 
 /** Run ONE test instead of the whole suite. */
@@ -846,7 +850,7 @@ export async function runMcpToolSuiteCase(suiteId: string, caseId: string) {
     `/api/mcp-lab/tool-suites/${encodeURIComponent(suiteId)}/cases/${encodeURIComponent(caseId)}/run`,
     { method: "POST" }
   )
-  return readJson<McpSuiteRunResult>(res)
+  return runAsJob<McpSuiteRunResult>(res)
 }
 
 /** Change what one test covers, from a plain-language instruction. */

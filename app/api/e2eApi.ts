@@ -53,10 +53,33 @@ export interface E2eTest {
     passed: boolean
     error: string
     durationMs: number
+    // Private S3 keys for a FAILED attempt's recording. Never links: the
+    // watchable URL is signed on demand and expires (see getAttemptArtifact).
+    videoKey?: string
+    traceKey?: string
+    // Older rows only — a permanent public link, no longer written.
     traceUrl?: string
   }[]
   commit?: E2eCommit
   createdAt: string
+}
+
+/**
+ * A short-lived signed link to what a failed attempt did: the video of the run,
+ * or the Playwright trace.
+ */
+export async function getAttemptArtifact(
+  testId: string,
+  attempt: number,
+  kind: "video" | "trace"
+): Promise<string> {
+  const res = await apiFetch(
+    `/api/e2e/tests/${testId}/attempts/${attempt}/${kind}`,
+    { cache: "no-store" }
+  )
+  if (!res.ok) return ""
+  const body = (await res.json()) as { url?: string }
+  return body.url || ""
 }
 
 export interface E2eCommit {

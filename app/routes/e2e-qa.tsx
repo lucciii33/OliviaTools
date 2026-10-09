@@ -27,6 +27,7 @@ import {
   type E2eTest,
   type E2eTestKind,
   type Gherkin,
+  getAttemptArtifact,
 } from "~/api/e2eApi"
 import { useInstallationsApi } from "~/api/installationsApi"
 import { cn } from "~/lib/utils"
@@ -1011,42 +1012,7 @@ export default function E2eQa() {
                         </summary>
                         <div className="mt-2 space-y-2">
                           {t.heal.map((h) => (
-                            <div
-                              key={h.attempt}
-                              className="rounded-md border p-2 text-xs"
-                            >
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium">
-                                  Attempt {h.attempt}
-                                </span>
-                                {h.passed ? (
-                                  <span className="text-emerald-600">✓ passed</span>
-                                ) : (
-                                  <span className="text-red-600">✗ failed</span>
-                                )}
-                                <span className="text-muted-foreground">
-                                  {(h.durationMs / 1000).toFixed(1)}s
-                                </span>
-                                {h.traceUrl && (
-                                  // Playwright trace for this failed attempt:
-                                  // DOM snapshots, per-step screenshots, network.
-                                  // Downloads a .zip — open it at trace.playwright.dev.
-                                  <a
-                                    href={h.traceUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="underline underline-offset-2 text-muted-foreground hover:text-foreground"
-                                  >
-                                    trace
-                                  </a>
-                                )}
-                              </div>
-                              {!h.passed && h.error && (
-                                <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap text-[11px] text-red-700">
-                                  {h.error}
-                                </pre>
-                              )}
-                            </div>
+                            <HealAttempt key={h.attempt} testId={t._id} attempt={h} />
                           ))}
                         </div>
                       </details>
@@ -1222,6 +1188,103 @@ function TestCaseEditor({
           {isNew ? "Create case" : "Save"}
         </Button>
       </div>
+    </div>
+  )
+}
+
+/**
+ * One attempt of the heal loop, with the recording of what went wrong.
+ *
+ * Watching the browser fail is the fastest way to understand a failed test —
+ * far faster than reading a stack trace. The recording only exists for failed
+ * attempts, and its link is signed and expires, because it shows the customer's
+ * logged-in app: their data, their session.
+ */
+function HealAttempt({
+  testId,
+  attempt: h,
+}: {
+  testId: string
+  attempt: {
+    attempt: number
+    passed: boolean
+    error: string
+    durationMs: number
+    videoKey?: string
+    traceKey?: string
+    traceUrl?: string
+  }
+}) {
+  const [videoUrl, setVideoUrl] = useState("")
+  const [loadingVideo, setLoadingVideo] = useState(false)
+
+  async function watch() {
+    if (videoUrl) {
+      setVideoUrl("")
+      return
+    }
+    setLoadingVideo(true)
+    const url = await getAttemptArtifact(testId, h.attempt, "video")
+    setLoadingVideo(false)
+    setVideoUrl(url)
+  }
+
+  async function openTrace() {
+    const url = h.traceKey
+      ? await getAttemptArtifact(testId, h.attempt, "trace")
+      : h.traceUrl || ""
+    if (url) window.open(url, "_blank", "noopener")
+  }
+
+  return (
+    <div className="rounded-md border p-2 text-xs">
+      <div className="flex items-center gap-2">
+        <span className="font-medium">Attempt {h.attempt}</span>
+        {h.passed ? (
+          <span className="text-emerald-600">✓ passed</span>
+        ) : (
+          <span className="text-red-600">✗ failed</span>
+        )}
+        <span className="text-muted-foreground">
+          {(h.durationMs / 1000).toFixed(1)}s
+        </span>
+
+        {h.videoKey && (
+          <button
+            type="button"
+            onClick={watch}
+            className="underline underline-offset-2 text-muted-foreground hover:text-foreground"
+          >
+            {loadingVideo ? "loading…" : videoUrl ? "hide video" : "watch video"}
+          </button>
+        )}
+        {(h.traceKey || h.traceUrl) && (
+          // The Playwright trace: DOM snapshots, per-step screenshots, network.
+          // Downloads a .zip — open it at trace.playwright.dev.
+          <button
+            type="button"
+            onClick={openTrace}
+            className="underline underline-offset-2 text-muted-foreground hover:text-foreground"
+          >
+            trace
+          </button>
+        )}
+      </div>
+
+      {videoUrl && (
+        <video
+          src={videoUrl}
+          controls
+          autoPlay
+          className="mt-2 w-full rounded border"
+        />
+      )}
+
+      {!h.passed && h.error && (
+        <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap text-[11px] text-red-700">
+          {h.error}
+        </pre>
+      )}
     </div>
   )
 }

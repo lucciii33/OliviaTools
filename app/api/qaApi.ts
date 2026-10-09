@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { apiFetch } from "~/utils/api"
+import { runAsJob } from "~/api/jobsApi"
 import type { Doc } from "./docsApi"
 
 export type QaAuthType = "none" | "bearer" | "apiKey" | "basic" | "custom" | "oauth2_client_credentials"
@@ -350,12 +351,9 @@ export function useQaApi() {
         method: "POST",
         body: JSON.stringify(authSchemeName ? { authSchemeName } : {}),
       })
-      if (!res.ok) {
-        const body = await res.text()
-        setError(body || `Run failed (${res.status})`)
-        return null
-      }
-      return (await res.json()) as QaRun
+      // A bug hunt runs as a job now, so several can go at once. Waiting here
+      // keeps this returning the run itself, as every caller expects.
+      return await runAsJob<QaRun>(res)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Run failed")
       return null
@@ -801,12 +799,9 @@ export function useQaApi() {
         method: "POST",
         body: JSON.stringify(authSchemeName ? { authSchemeName } : {}),
       })
-      if (!res.ok) {
-        const body = await res.text()
-        setError(safeMessage(body) || `Run failed (${res.status})`)
-        return null
-      }
-      return (await res.json()) as SuiteRunResult
+      // Answers with a job id (so several runs can go at once); waiting here
+      // keeps this function's contract unchanged.
+      return await runAsJob<SuiteRunResult>(res)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Run failed")
       return null
@@ -826,12 +821,7 @@ export function useQaApi() {
         method: "POST",
         body: JSON.stringify(authSchemeName ? { authSchemeName } : {}),
       })
-      if (!res.ok) {
-        const body = await res.text()
-        setError(safeMessage(body) || `Run failed (${res.status})`)
-        return null
-      }
-      return (await res.json()) as SuiteRunResult
+      return await runAsJob<SuiteRunResult>(res)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Run failed")
       return null

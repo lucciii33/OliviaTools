@@ -22,7 +22,9 @@ import {
   Zap,
 } from "lucide-react";
 import { buttonVariants } from "~/components/ui/button";
-import { cn } from "~/lib/utils";
+import { cn } from "~/lib/utils"
+import { Reveal } from "~/components/Reveal"
+import { WatcherShowcase } from "~/components/WatcherShowcase";
 
 const apiOutputs = [
   "Endpoint documentation",
@@ -253,8 +255,14 @@ export default function Home() {
       </header>
 
       <main>
-        <section className="border-b border-white/10 px-5 py-14 md:px-8 md:py-20">
-          <div className="mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-[1fr_0.95fr]">
+        <section className="relative overflow-hidden border-b border-white/10 px-5 py-14 md:px-8 md:py-20">
+          {/* Decorative glow. aria-hidden and pointer-events-none: it must never
+              come between a reader and the text, or a click and a link. */}
+          <div
+            aria-hidden
+            className="olivia-glow pointer-events-none absolute -top-40 left-1/2 h-[28rem] w-[46rem] -translate-x-1/2 rounded-full bg-cyan-500/15 blur-3xl"
+          />
+          <div className="relative mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-[1fr_0.95fr]">
             <div className="max-w-3xl">
               <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-xs font-medium text-cyan-100">
                 <Zap className="h-3.5 w-3.5" />
@@ -262,13 +270,13 @@ export default function Home() {
               </div>
 
               <h1 className="text-4xl font-semibold leading-[1.02] tracking-tight text-white sm:text-5xl md:text-6xl">
-                Document and test your MCP server automatically.
+                Your API documents and tests itself after every merge.
               </h1>
 
               <p className="mt-5 max-w-2xl text-base leading-7 text-white/[0.66] md:text-lg">
-                Connect your MCP server and Olivia discovers every tool, writes
-                the docs, runs smoke tests with real arguments, and reports bugs
-                with evidence — in minutes, not sprints.
+                Connect a repo or an MCP server. Olivia writes the docs, writes
+                the tests and hunts real bugs with real requests — then keeps
+                doing it on its own, every time a pull request lands.
               </p>
 
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
@@ -382,6 +390,28 @@ export default function Home() {
                 </div>
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* The watcher: the part people buy once they have seen it happen. */}
+        <section className="border-b border-white/10 px-5 py-14 md:px-8 md:py-20">
+          <div className="mx-auto max-w-7xl">
+            <Reveal className="mb-8 max-w-3xl">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200/70">
+                The watcher
+              </p>
+              <h2 className="text-2xl font-semibold tracking-tight text-white md:text-3xl">
+                An endpoint shipped on Friday is documented and covered by Monday.
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-white/55">
+                Watch a branch and Olivia does, after every merge, what someone
+                otherwise has to remember to do by hand. Nothing to press — your
+                pull requests trigger it.
+              </p>
+            </Reveal>
+            <Reveal delayMs={80}>
+              <WatcherShowcase />
+            </Reveal>
           </div>
         </section>
 
@@ -632,7 +662,7 @@ export default function Home() {
           className="scroll-mt-24 border-y border-white/10 bg-white/[0.02] px-5 py-12 md:px-8 md:py-16"
         >
           <div className="mx-auto max-w-7xl">
-            <div className="mb-8 max-w-3xl">
+            <Reveal className="mb-8 max-w-3xl">
               <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200/70">
                 Pricing
               </p>
@@ -645,14 +675,14 @@ export default function Home() {
                 keeps them current after each merge. Bring your own Claude key and any
                 plan is 40% off with no usage cap.
               </p>
-            </div>
+            </Reveal>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {pricingTiers.map((tier) => (
+              {pricingTiers.map((tier, i) => (
+                <Reveal key={tier.name} delayMs={i * 70} className="h-full">
                 <article
-                  key={tier.name}
                   className={cn(
-                    "relative flex flex-col rounded-lg border p-6",
+                    "relative flex h-full flex-col rounded-lg border p-6 transition-transform duration-300 hover:-translate-y-1",
                     tier.highlighted
                       ? "border-cyan-300/40 bg-cyan-400/10 shadow-2xl shadow-cyan-500/10"
                       : "border-white/10 bg-white/[0.035]"
@@ -695,6 +725,7 @@ export default function Home() {
                     {tier.cta} <ArrowRight className="h-4 w-4" />
                   </Link>
                 </article>
+                </Reveal>
               ))}
             </div>
 
